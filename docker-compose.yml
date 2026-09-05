@@ -1,0 +1,28 @@
+services:
+  railsync:
+    build:
+      context: .
+      args:
+        VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+        VITE_GEOAPIFY_API_KEY: ${VITE_GEOAPIFY_API_KEY:-}
+    container_name: railsync
+    ports:
+      - "8000:8000"
+    environment:
+      RAILRADAR_API_KEY: ${RAILRADAR_API_KEY:-}
+      OPENWEATHER_API_KEY: ${OPENWEATHER_API_KEY:-}
+      OPENTOPOGRAPHY_API_KEY: ${OPENTOPOGRAPHY_API_KEY:-}
+      OPENTOPOGRAPHY_DATASET: ${OPENTOPOGRAPHY_DATASET:-COP30}
+      VITE_MAPTILER_API_KEY: ${VITE_MAPTILER_API_KEY:-}
+      VITE_GEOAPIFY_API_KEY: ${VITE_GEOAPIFY_API_KEY:-}
+      OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+      RAILRADAR_AUTO_SYNC: ${RAILRADAR_AUTO_SYNC:-false}
+      RAILRADAR_POLL_SECONDS: ${RAILRADAR_POLL_SECONDS:-900}
+      RAILRADAR_CACHE_SECONDS: ${RAILRADAR_CACHE_SECONDS:-300}
+      OPENWEATHER_POLL_SECONDS: ${OPENWEATHER_POLL_SECONDS:-600}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

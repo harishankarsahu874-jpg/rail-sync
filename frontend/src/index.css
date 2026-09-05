@@ -1,0 +1,68 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root { height: 100%; }
+body { @apply bg-ink-950 text-slate-100 font-sans antialiased; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1c2951; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #2a3c72; }
+
+/* MapLibre / MapTiler live map */
+.maplibregl-map { background: #0a1020; font-family: inherit; }
+.maplibregl-ctrl-group { background: #0c1226 !important; border: 1px solid #1c2951; box-shadow: 0 4px 14px rgba(0,0,0,.35) !important; }
+.maplibregl-ctrl-group button + button { border-top-color: #1c2951 !important; }
+.maplibregl-ctrl button .maplibregl-ctrl-icon { filter: invert(70%) sepia(25%) saturate(800%) hue-rotate(190deg); }
+.maplibregl-ctrl-attrib, .maplibregl-ctrl-scale { background: rgba(10,16,32,.82) !important; color: #7180ac !important; border-color: #1c2951 !important; font-size: 9px !important; }
+.maplibregl-ctrl-attrib a { color: #8fa5ff !important; }
+.maplibregl-popup-content { background: #0c1226; border: 1px solid #1c2951; color: #e8ecff; border-radius: 8px; box-shadow: 0 8px 28px rgba(0,0,0,.55); font-size: 11px; }
+.maplibregl-popup-content span { color: #7180ac; }
+.maplibregl-popup-tip { border-top-color: #0c1226 !important; border-bottom-color: #0c1226 !important; }
+
+.trn-map-marker {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(10, 16, 32, 0.94);
+  border: 1.5px solid #4f6ef7;
+  border-radius: 999px;
+  padding: 3px 10px 3px 8px;
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 12px; font-weight: 700; letter-spacing: .02em;
+  color: #e8ecff; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.55);
+  white-space: nowrap; transition: transform .15s, box-shadow .15s;
+}
+.trn-map-marker:hover, .trn-map-marker.selected { transform: scale(1.08); z-index: 2; }
+.trn-map-marker.selected { box-shadow: 0 0 0 4px rgba(79,110,247,.22), 0 6px 20px rgba(0,0,0,.65); }
+.trn-map-marker .dot { width: 8px; height: 8px; border-radius: 999px; flex: none; }
+.trn-map-marker.ok { border-color: #2ee6a8; }
+.trn-map-marker.minor { border-color: #ffc233; }
+.trn-map-marker.major { border-color: #ff5c5c; }
+.trn-map-marker.severe { border-color: #ff2d55; }
+.trn-map-marker.boarded { border-color: #8fa5ff; }
+.trn-map-marker.arrived { border-color: #55618f; opacity: .75; }
+.trn-map-marker .dot.ok { background: #2ee6a8; }
+.trn-map-marker .dot.minor { background: #ffc233; }
+.trn-map-marker .dot.major { background: #ff5c5c; animation: board-blink 1s infinite; }
+.trn-map-marker .dot.severe { background: #ff2d55; animation: board-blink .7s infinite; }
+.trn-map-marker .dot.boarded { background: #8fa5ff; animation: board-blink 1.6s infinite; }
+.trn-map-marker .dot.arrived { background: #55618f; }
+
+/* ---- station LED board ---- */
+.led { text-shadow: 0 0 8px currentColor; }
+
+/* Light public landing-page railway motif (no external image dependency). */
+.rail-lines {
+  background-image:
+    linear-gradient(90deg, transparent 0 8%, rgba(13,148,136,.10) 8% 8.35%, transparent 8.35% 16%),
+    linear-gradient(176deg, transparent 47%, rgba(13,148,136,.16) 47.2% 47.8%, transparent 48%),
+    linear-gradient(184deg, transparent 53%, rgba(13,148,136,.09) 53.2% 53.8%, transparent 54%);
+  background-size: 96px 100%, 100% 100%, 100% 100%;
+  mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+}
+
+/* ---- misc ---- */
+.panel { @apply bg-ink-850 border border-line rounded-xl; }
+.chip { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold; }
+.kpi-num { @apply font-mono text-2xl font-bold tracking-tight; }

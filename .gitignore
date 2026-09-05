@@ -1,0 +1,20 @@
+# python
+__pycache__/
+*.pyc
+backend/.venv/
+backend/data/
+
+# node
+frontend/node_modules/
+frontend/dist/
+
+# secrets (commit .env.example only)
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+
+# misc
+.DS_Store
+*.log
