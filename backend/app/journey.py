@@ -42,18 +42,19 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
 
     # --- route: catalogue first (complete), RailRadar halts as fallback -----
     if cat and cat["halt_stops"]:
-        halts = [
-            {
+        halts = []
+        for s in cat["halt_stops"]:
+            pt = catalog.coord(s["code"])
+            halts.append({
                 "seq": s["seq"], "code": s["code"], "name": s["name"],
                 "distance_km": s["km"],
                 "sched": _label(s["sched"], s["day"]),
                 "sched_min": None if s["sched"] is None else s["sched"] + (s["day"] - 1) * 1440,
                 "day": s["day"], "passed": False, "next": False,
-                "lat": None, "lng": None, "weather": None,
+                "lat": pt[0] if pt else None, "lng": pt[1] if pt else None,
+                "weather": None,
                 "drift_min": None, "eta_min": None, "eta_final_min": None,
-            }
-            for s in cat["halt_stops"]
-        ]
+            })
         route = []
     else:
         route = [r for r in (data.get("route") or []) if isinstance(r, dict)]
@@ -101,7 +102,8 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
     if running:
         manager.observe(number, train_meta.get("name") or (cat or {}).get("name") or f"Train {number}")
         manager.start_enrichment(number, [{"seq": h["seq"], "name": h["name"],
-                                           "passed": h["passed"]} for h in halts])
+                                           "passed": h["passed"], "lat": h["lat"],
+                                           "lng": h["lng"]} for h in halts])
 
     route_geo = [{"seq": h["seq"], "code": h["code"], "name": h["name"],
                   "lat": h["lat"], "lng": h["lng"], "passed": h["passed"],

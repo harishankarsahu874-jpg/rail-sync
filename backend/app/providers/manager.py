@@ -130,7 +130,10 @@ class ProviderManager:
             weather = self.weather_at(position["lat"], position["lng"]) if position else None
             cop30 = self.cop30_at(position["lat"], position["lng"]) if position else None
             geo: dict[str, dict] = {}
-            for halt in halts:  # sequential on purpose: keyless geocoder etiquette
+            for halt in halts:  # committed coords first; geocoders fill gaps
+                if halt.get("lat") is not None:
+                    geo[str(halt["seq"])] = {"lat": halt["lat"], "lng": halt["lng"]}
+                    continue
                 try:
                     got = self.geocode_halt(halt["name"])
                 except Exception:  # noqa: BLE001

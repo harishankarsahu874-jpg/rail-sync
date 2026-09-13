@@ -131,6 +131,29 @@ def stats() -> dict:
     return {"trains": len(trains), "stops": sum(len(t["stops"]) for t in trains.values())}
 
 
+_COORDS: dict[str, list[float]] | None = None
+
+
+def coords() -> dict[str, list[float]]:
+    """Committed station-code → [lat, lng] table (datameet/railways, CC-BY).
+
+    Covers 96.7% of catalogued halt codes, so route lines draw on first paint
+    with zero network calls; the live geocoder chain fills the rest.
+    """
+    global _COORDS
+    if _COORDS is None:
+        try:
+            with open(DATA_DIR / "station_coords.json", encoding="utf-8") as handle:
+                _COORDS = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            _COORDS = {}
+    return _COORDS
+
+
+def coord(code: str) -> list[float] | None:
+    return coords().get(str(code).upper())
+
+
 _INDEX: dict[str, list[dict]] | None = None
 _INDEX_LOCK = threading.Lock()
 
