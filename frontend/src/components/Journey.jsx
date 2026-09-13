@@ -38,8 +38,7 @@ export default function Journey() {
   const [error, setError] = useState('');
   const [place, setPlace] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [boardOpen, setBoardOpen] = useState(false);
-  const [openStop, setOpenStop] = useState(null);
+  const [boardOpen, setBoardOpen] = useState(true);
   const [reload, setReload] = useState(0);
 
   // Progressive loading: first paint needs only RailRadar + catalogue + RF.
@@ -99,8 +98,12 @@ export default function Journey() {
     return points.map((p, i) => ({ km: i, m: elevations[i] ?? null }));
   }, [data]);
   const routeGeo = useMemo(
-    () => (data?.route_geo || []).map((g) => ({ ...g, eta_label: fmtMin(g.eta_final_min) })),
-    [data],
+    () => (data?.route_geo || []).map((g) => ({
+      ...g,
+      eta_label: fmtMin(g.eta_final_min),
+      href: g.code ? `/train/${number}/station/${g.code}` : '',
+    })),
+    [data, number],
   );
 
   if (error && !data) {
@@ -140,8 +143,6 @@ export default function Journey() {
       </div>
     );
   }
-
-  const mapReady = Boolean(train.position || routeGeo.length);
 
   return (
     <div className="wrap">
@@ -232,20 +233,14 @@ export default function Journey() {
               teal line = route ahead · dots = every scheduled halt
             </div>
             <div style={{ marginTop: 12 }}>
-              {mapReady ? (
-                <Suspense fallback={<div className="skel" style={{ height: 420, borderRadius: 16 }} />}>
-                  <MapView
-                    position={train.position}
-                    running={train.running}
-                    track={train.position?.track || null}
-                    routeGeo={routeGeo}
-                  />
-                </Suspense>
-              ) : (
-                <div className="map-shell map-wait">
-                  <div className="map-wait-label">locating train on the map…</div>
-                </div>
-              )}
+              <Suspense fallback={<div className="skel" style={{ height: 420, borderRadius: 16 }} />}>
+                <MapView
+                  position={train.position}
+                  running={train.running}
+                  track={train.position?.track || null}
+                  routeGeo={routeGeo}
+                />
+              </Suspense>
             </div>
             {place?.available && (
               <div className="chip chip-plain" style={{ marginTop: 10 }}>
@@ -298,8 +293,8 @@ export default function Journey() {
                   Station board · full route
                 </div>
                 <div className="card-sub">
-                  {halts.length} stations · uploaded Indian timetable + live ETA overlay ·
-                  {' '}{data?.catalogue?.in_catalogue ? 'in catalogue' : 'RailRadar route'}
+                  {halts.length} stations · click any row for photos, description & every train calling there ·
+                  {' '}{data?.catalogue?.in_catalogue ? 'uploaded timetable' : 'RailRadar route'}
                 </div>
               </div>
               <button type="button" className="try-chip" onClick={() => setBoardOpen((v) => !v)}>
@@ -312,37 +307,22 @@ export default function Journey() {
                   <span>#</span><span>CODE</span><span>STATION</span><span>SCHED</span><span>ETA FINAL</span><span>STATUS</span>
                 </div>
                 {halts.map((halt) => (
-                  <React.Fragment key={`${halt.seq}-${halt.code || halt.name}`}>
-                    <button
-                      type="button"
-                      className={`led-row ${halt.passed ? 'passed' : ''} ${halt.next ? 'next' : ''}`}
-                      onClick={() => setOpenStop((s) => (s === halt.seq ? null : halt.seq))}
-                    >
-                      <span>{halt.seq}</span>
-                      <span>{halt.code || '—'}</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{halt.name}</span>
-                      <span>{halt.sched || '—'}</span>
-                      <span style={{ color: halt.passed ? undefined : '#34d399' }}>
-                        {halt.passed ? '—' : fmtMin(halt.eta_final_min ?? halt.eta_min)}
-                      </span>
-                      <span className="st">{halt.passed ? 'PASSED' : halt.next ? 'NEXT' : 'UPCOMING'}</span>
-                    </button>
-                    {openStop === halt.seq && (
-                      <div className="led-detail">
-                        <span>📏 {Math.round(halt.distance_km)} km from origin</span>
-                        {halt.day > 1 && <span>🗓 journey day {halt.day}</span>}
-                        {!halt.passed && halt.drift_min != null && (
-                          <span>🤖 RF drift {halt.drift_min > 0 ? '+' : ''}{halt.drift_min} min</span>
-                        )}
-                        {halt.weather && (
-                          <span className="chip chip-plain">
-                            {Math.round(halt.weather.temperature_c)}° · {halt.weather.condition} · RH {halt.weather.humidity_pct}%
-                          </span>
-                        )}
-                        {!halt.weather && !halt.passed && <span>stop weather: geocode/pending or unavailable</span>}
-                      </div>
-                    )}
-                  </React.Fragment>
+                  <Link
+                    key={`${halt.seq}-${halt.code || halt.name}`}
+                    to={halt.code ? `/train/${number}/station/${halt.code}` : '#'}
+                    state={{ halt }}
+                    className={`led-row ${halt.passed ? 'passed' : ''} ${halt.next ? 'next' : ''}`}
+                    title="Open the full station dossier"
+                  >
+                    <span>{halt.seq}</span>
+                    <span>{halt.code || '—'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{halt.name}</span>
+                    <span>{halt.sched || '—'}</span>
+                    <span style={{ color: halt.passed ? undefined : '#34d399' }}>
+                      {halt.passed ? '—' : fmtMin(halt.eta_final_min ?? halt.eta_min)}
+                    </span>
+                    <span className="st">{halt.passed ? 'PASSED' : halt.next ? 'NEXT' : 'UPCOMING'}</span>
+                  </Link>
                 ))}
               </div>
             )}

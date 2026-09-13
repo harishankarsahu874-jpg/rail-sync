@@ -1,58 +1,61 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
-import { mapStyle, MAPTILER_KEY } from '../geo.js';
+import { mapStyle, MAP_TYPES } from '../geo.js';
+
+const storedType = () => {
+  try {
+    const v = localStorage.getItem('rs_maptype');
+    return MAP_TYPES.some((t) => t.id === v) ? v : 'sat';
+  } catch {
+    return 'sat';
+  }
+};
 
 /**
- * Live route map, RailRadar-style: the full scheduled route as a teal line,
- * every halt as a dot (grey once passed), the NEXT halt ringed in amber and
- * the train itself as a pulsing marker at its exact live fix (snapped to the
- * real OSM track when inside the guard). Heavy layers update in place when the
- * background enrichment lands, so first paint stays instant.
+ * Live route map, RailRadar-style but realistic: satellite imagery by default
+ * (passenger-switchable Satellite / Streets / Dark), the full scheduled route
+ * as a teal line, every halt as a dot (grey once passed, amber ring on NEXT)
+ * and the train as a pulsing marker at its exact live fix. Raster basemaps =
+ * instant first tiles; vector layers re-attach after every style switch.
  */
-export default function MapView({ position, running, routeGeo = [], track = null }) {
+export default function MapView({ position, running, routeGeo = [], track = null, onStationClick }) {
   const containerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const fittedRef = useRef(false);
   const propsRef = useRef({ position, running, routeGeo, track });
   propsRef.current = { position, running, routeGeo, track };
+  const [mapType, setMapType] = useState(storedType);
   const [note, setNote] = useState('');
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return undefined;
-    const first = routeGeo[0];
+    const first = (routeGeo || [])[0];
     const center = position ? [position.lng, position.lat] : first ? [first.lng, first.lat] : [79.8, 23.4];
+    const type = MAP_TYPES.find((t) => t.id === storedType()) || MAP_TYPES[0];
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: mapStyle(),
+      style: type.build(),
       center,
       zoom: position || routeGeo.length ? 5.2 : 4.4,
-      minZoom: 3.5,
-      maxZoom: 16,
+      minZoom: 3,
+      maxZoom: 17,
       attributionControl: true,
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 110 }), 'bottom-right');
 
-    let fellBack = false;
     let tileErrors = 0;
     let windowStart = 0;
-    const fallback = (reason) => {
-      fellBack = true;
-      setNote(reason);
-      map.setStyle(mapStyle(true));
-    };
     map.on('error', () => {
-      if (!MAPTILER_KEY || fellBack) return;
-      if (!map.isStyleLoaded()) {
-        fallback('MapTiler style rejected — free OSM basemap shown');
-        return;
-      }
       const now = Date.now();
       if (now - windowStart > 30_000) { windowStart = now; tileErrors = 0; }
       tileErrors += 1;
-      if (tileErrors >= 8) fallback('MapTiler tiles rejected — free OSM basemap shown');
+      if (tileErrors >= 10 && storedType() !== 'dark') {
+        setNote('Basemap unreachable — switched to the free dark raster');
+        applyType('dark', true);
+      }
     });
 
     const el = document.createElement('div');
@@ -60,7 +63,8 @@ export default function MapView({ position, running, routeGeo = [], track = null
     el.innerHTML = '<span class="ring"></span><span class="core"></span>';
     markerRef.current = new maplibregl.Marker({ element: el }).setLngLat(center).addTo(map);
 
-    map.on('load', () => {
+    const addLayers = () => {
+      if (map.getSource('rs-stops')) return;
       map.addSource('rs-route-passed', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       map.addSource('rs-route-ahead', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
       map.addSource('rs-stops', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
@@ -76,7 +80,7 @@ export default function MapView({ position, running, routeGeo = [], track = null
       map.addLayer({
         id: 'rs-route-passed-line', type: 'line', source: 'rs-route-passed',
         layout: { 'line-cap': 'round', 'line-join': 'round' },
-        paint: { 'line-color': '#64748b', 'line-width': 2.5, 'line-opacity': 0.75, 'line-dasharray': [1.5, 1.5] },
+        paint: { 'line-color': '#94a3b8', 'line-width': 2.5, 'line-opacity': 0.8, 'line-dasharray': [1.5, 1.5] },
       });
       map.addLayer({
         id: 'rs-route-ahead-line', type: 'line', source: 'rs-route-ahead',
@@ -84,11 +88,15 @@ export default function MapView({ position, running, routeGeo = [], track = null
         paint: { 'line-color': '#14b8a6', 'line-width': 3, 'line-opacity': 0.95 },
       });
       map.addLayer({
+        id: 'rs-stops-halo', type: 'circle', source: 'rs-stops',
+        paint: { 'circle-radius': ['case', ['get', 'next'], 9, 6], 'circle-color': 'rgba(13,148,136,0.25)' },
+      });
+      map.addLayer({
         id: 'rs-stops-dot', type: 'circle', source: 'rs-stops',
         paint: {
-          'circle-radius': ['case', ['get', 'next'], 5, 3.2],
-          'circle-color': ['case', ['get', 'passed'], '#94a3b8', ['get', 'next'], '#f59e0b', '#0d9488'],
-          'circle-stroke-width': 1.2,
+          'circle-radius': ['case', ['get', 'next'], 5, 3.4],
+          'circle-color': ['case', ['get', 'passed'], '#cbd5e1', ['get', 'next'], '#f59e0b', '#0d9488'],
+          'circle-stroke-width': 1.4,
           'circle-stroke-color': '#0b0f14',
         },
       });
@@ -96,20 +104,21 @@ export default function MapView({ position, running, routeGeo = [], track = null
         const f = e.features?.[0];
         if (!f) return;
         const p = f.properties;
-        new maplibregl.Popup({ maxWidth: '240px', offset: 8 })
+        const href = p.href ? `<a href="${p.href}" style="color:#0d9488;font-weight:700;text-decoration:none">Open station dossier →</a>` : '';
+        new maplibregl.Popup({ maxWidth: '250px', offset: 8 })
           .setLngLat(e.lngLat)
           .setHTML(`<div style="font:600 12px/1.4 system-ui">${p.name}</div>
-            <div style="font:11px/1.5 system-ui;color:#475569">${p.code} · sched ${p.sched || '—'}${p.eta ? `<br>predicted <b>${p.eta}</b>` : ''}${p.passed ? '<br><i>passed</i>' : ''}</div>`)
+            <div style="font:11px/1.6 system-ui;color:#475569">${p.code} · sched ${p.sched || '—'}${p.eta ? `<br>predicted <b>${p.eta}</b>` : ''}${p.passed ? '<br><i>passed</i>' : ''}</div>
+            ${href}`)
           .addTo(map);
+        if (p.href && onStationClick) { /* link handles navigation */ }
       });
       map.on('mouseenter', 'rs-stops-dot', () => { map.getCanvas().style.cursor = 'pointer'; });
       map.on('mouseleave', 'rs-stops-dot', () => { map.getCanvas().style.cursor = ''; });
-      map._rsReady = true;
-      paint();
-    });
+    };
 
     const paint = () => {
-      if (!map._rsReady || !map.getSource('rs-stops')) return;
+      if (!map.getSource('rs-stops')) return;
       const cur = propsRef.current;
       const posNow = cur.position;
       const runningNow = cur.running;
@@ -130,7 +139,10 @@ export default function MapView({ position, running, routeGeo = [], track = null
         type: 'FeatureCollection',
         features: pts.map((p) => ({
           type: 'Feature',
-          properties: { name: p.name, code: p.code || '', sched: p.sched || '', passed: Boolean(p.passed), next: Boolean(p.next), eta: p.eta_label || '' },
+          properties: {
+            name: p.name, code: p.code || '', sched: p.sched || '', passed: Boolean(p.passed),
+            next: Boolean(p.next), eta: p.eta_label || '', href: p.href || '',
+          },
           geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
         })),
       });
@@ -138,16 +150,28 @@ export default function MapView({ position, running, routeGeo = [], track = null
         type: 'FeatureCollection',
         features: trackNow && trackNow.length >= 2 ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: trackNow.map(([a, b]) => [b, a]) } }] : [],
       });
-      if (trainAt && markerRef.current) markerRef.current.setLngLat(trainAt);
-      else if (markerRef.current) markerRef.current.setLngLat(center);
+      if (markerRef.current) markerRef.current.setLngLat(trainAt || center);
       if (!fittedRef.current && pts.length >= 2) {
         fittedRef.current = true;
-        const bounds = pts.reduce((b, p) => b.extend([p.lng, p.lat]), new maplibregl.LngLatBounds([pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]));
+        const bounds = pts.reduce((b, p) => b.extend([p.lng, p.lat]),
+          new maplibregl.LngLatBounds([pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]));
         if (trainAt) bounds.extend(trainAt);
-        map.fitBounds(bounds, { padding: 56, maxZoom: 9.5 });
+        map.fitBounds(bounds, { padding: 60, maxZoom: 9.5 });
       }
     };
     map._rsPaint = paint;
+
+    const applyType = (id, silent = false) => {
+      const next = MAP_TYPES.find((t) => t.id === id) || MAP_TYPES[0];
+      try { localStorage.setItem('rs_maptype', next.id); } catch { /* ignore */ }
+      setMapType(next.id);
+      map.setStyle(next.build());
+      map.once('style.load', () => { addLayers(); paint(); });
+      if (!silent) setNote('');
+    };
+    map._rsApplyType = applyType;
+
+    map.on('load', () => { addLayers(); paint(); });
     return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -160,6 +184,18 @@ export default function MapView({ position, running, routeGeo = [], track = null
   return (
     <div className="map-shell">
       <div ref={containerRef} style={{ height: '100%' }} />
+      <div className="map-types" role="group" aria-label="Map type">
+        {MAP_TYPES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`map-type ${mapType === t.id ? 'on' : ''}`}
+            onClick={() => mapRef.current?._rsApplyType?.(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
       {note && <div className="map-note">{note}</div>}
       <div className="map-legend">
         <span><i className="lg-train" /> train (live fix)</span>

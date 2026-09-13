@@ -26,6 +26,53 @@ export function mapStyle(forceFallback = false) {
   };
 }
 
+/** Realistic satellite imagery (keyless Esri World Imagery raster). */
+export function satelliteStyle() {
+  return {
+    version: 8,
+    sources: {
+      esri: {
+        type: 'raster',
+        tileSize: 256,
+        maxzoom: 19,
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        ],
+        attribution: 'Imagery © Esri, Maxar, Earthstar Geographics & the GIS User Community',
+      },
+    },
+    layers: [{ id: 'esri', type: 'raster', source: 'esri' }],
+  };
+}
+
+/** Clean streets view (keyless CARTO Voyager raster). */
+export function streetsStyle() {
+  return {
+    version: 8,
+    sources: {
+      voyager: {
+        type: 'raster',
+        tileSize: 256,
+        maxzoom: 20,
+        tiles: [
+          'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+          'https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+          'https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+        ],
+        attribution: '© OpenStreetMap contributors © CARTO',
+      },
+    },
+    layers: [{ id: 'voyager', type: 'raster', source: 'voyager' }],
+  };
+}
+
+/** The three basemaps the passenger can switch between. */
+export const MAP_TYPES = [
+  { id: 'sat', label: '🛰 Satellite', build: () => satelliteStyle() },
+  { id: 'streets', label: '🗺 Streets', build: () => streetsStyle() },
+  { id: 'dark', label: '🌑 Dark', build: () => mapStyle(true) },
+];
+
 /** Reverse-geocode the live fix (Geoapify browser key, origin-restricted). */
 export async function reverseGeocode(lat, lng) {
   if (!GEOAPIFY_KEY) return { available: false, reason: 'VITE_GEOAPIFY_API_KEY is not configured' };

@@ -29,6 +29,14 @@ def _minutes(hhmmss: str | None) -> int | None:
         return None
 
 
+def _stop_label(stop: dict) -> str | None:
+    if stop.get("sched") is None:
+        return None
+    hh, mm = divmod(stop["sched"], 60)
+    day = stop.get("day", 1)
+    return f"{hh:02d}:{mm:02d}" + (f" +{day - 1}d" if day > 1 else "")
+
+
 def _synthesise_km(stops: list[dict], total_km: float) -> None:
     """Uploads carry distance=0 on most rows — interpolate km from the clock.
 
@@ -113,9 +121,37 @@ def _load() -> dict[str, dict]:
         return trains
 
 
+def count_at(code: str) -> int:
+    """Uncapped number of catalogued services halting at a station code."""
+    return len(trains_at(code, limit=10 ** 9))
+
+
 def stats() -> dict:
     trains = _load()
     return {"trains": len(trains), "stops": sum(len(t["stops"]) for t in trains.values())}
+
+
+_INDEX: dict[str, list[dict]] | None = None
+_INDEX_LOCK = threading.Lock()
+
+
+def trains_at(code: str, limit: int = 40) -> list[dict]:
+    """Every catalogued service that halts at a station code (all-India index)."""
+    global _INDEX
+    with _INDEX_LOCK:
+        if _INDEX is None:
+            index: dict[str, list[dict]] = {}
+            for train in _load().values():
+                for stop in train["halt_stops"]:
+                    index.setdefault(stop["code"], []).append({
+                        "number": train["number"], "name": train["name"],
+                        "from": train["from_code"], "to": train["to_code"],
+                        "days": train["days"],
+                        "sched": _stop_label(stop),
+                    })
+            _INDEX = index
+        rows = _INDEX.get(str(code).upper(), [])
+    return rows[:limit]
 
 
 def get(number: str) -> dict | None:

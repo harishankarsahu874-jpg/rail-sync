@@ -14,7 +14,7 @@ import time
 from .. import config
 from .clients import (NominatimClient, OpenMeteoElevationClient, OpenMeteoGeocoder,
                       OpenTopographyClient, OpenWeatherClient, OverpassClient,
-                      PhotonGeocoder, RailRadarClient, haversine_m)
+                      PhotonGeocoder, RailRadarClient, WikimediaClient, haversine_m)
 
 _HALT_SUFFIXES = (" JN", " JUNCTION", " CENTRAL", " CANTT", " CITY", " ROAD", " STATION")
 
@@ -30,6 +30,7 @@ _SERVER_PROVIDERS = {
     "openmeteo": ("Open-Meteo", "Keyless batch elevation profiles + geocoding fallback"),
     "nominatim": ("Nominatim", "Keyless halt geocoding for stop weather"),
     "photon": ("Photon", "Keyless last-resort halt geocoding"),
+    "wikimedia": ("Wikimedia", "Keyless station photos (Commons) + summaries (Wikipedia)"),
 }
 
 
@@ -43,6 +44,7 @@ class ProviderManager:
         self.nominatim = NominatimClient()
         self.geoom = OpenMeteoGeocoder()
         self.photon = PhotonGeocoder()
+        self.wikimedia = WikimediaClient()
         self._lock = threading.RLock()
         self._cache: dict[str, tuple[float, object]] = {}
         self._observed: dict[str, dict] = {}
@@ -199,6 +201,7 @@ class ProviderManager:
             "openweather": self.weather.configured,
             "opentopography": self.topography.configured,
             "overpass": True, "openmeteo": True, "nominatim": True, "photon": True,
+            "wikimedia": True,
             "maptiler": True, "geoapify": True,  # browser keys ship in the bundle
         }[key]
 
@@ -314,6 +317,31 @@ class ProviderManager:
             return None
         # failures are NOT cached: a later enrichment pass can still fill gaps
         return self._cached(f"geo:{name}", config.GEOCODE_CACHE_SECONDS, load, store_none=False)
+
+    # --------------------------------------------------------- station media
+    def station_info(self, code: str, name: str) -> dict:
+        """Photo + encyclopedia summary for a station, keyless, long-cached."""
+        def load():
+            image, summary = None, None
+            pretty = name.title().replace(" Jn", " Junction")
+            try:
+                image = self.wikimedia.image(f"{pretty} railway station India")
+                if image:
+                    self._mark("wikimedia", ok=True)
+            except Exception as exc:  # noqa: BLE001
+                self._mark("wikimedia", ok=False, error=str(exc))
+            for title in (f"{pretty} railway station", f"{pretty} Junction railway station", pretty):
+                try:
+                    summary = self.wikimedia.summary(title)
+                except Exception:  # noqa: BLE001
+                    summary = None
+                if summary:
+                    break
+            if image or summary:
+                return {"image": image, "summary": summary}
+            return None
+        return self._cached(f"station:{code}:{name}", 7 * 86400, load, store_none=False) \
+            or {"image": None, "summary": None}
 
     # ------------------------------------------------------------- track snap
     def snap_to_rail(self, lat: float, lng: float) -> dict | None:

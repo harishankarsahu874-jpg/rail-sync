@@ -226,6 +226,38 @@ class NominatimClient:
                 "display": row.get("display_name", "")}
 
 
+class WikimediaClient:
+    """Keyless station photos (Commons) + encyclopedia summaries (Wikipedia)."""
+
+    name = "Wikimedia"
+
+    configured = True
+
+    def image(self, query: str) -> dict | None:
+        p = get_json(self.name, "https://commons.wikimedia.org/w/api.php",
+                     params={"action": "query", "format": "json", "generator": "search",
+                             "gsrsearch": f"filetype:bitmap {query}", "gsrnamespace": 6,
+                             "gsrlimit": 4, "prop": "imageinfo", "iiprop": "url|size",
+                             "iiurlwidth": 1000},
+                     timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        pages = (p or {}).get("query", {}).get("pages") or {}
+        for page in sorted(pages.values(), key=lambda r: r.get("index", 99)):
+            info = (page.get("imageinfo") or [{}])[0]
+            thumb = info.get("thumburl")
+            if thumb and (info.get("width") or 0) >= 500:
+                return {"url": thumb, "page": f"https://commons.wikimedia.org/wiki/{page.get('title', '').replace(' ', '_')}",
+                        "title": str(page.get("title", "")).replace("File:", "")}
+        return None
+
+    def summary(self, title: str) -> str | None:
+        p = get_json(self.name, f"https://en.wikipedia.org/api/rest_v1/page/summary/{title.replace(' ', '_')}",
+                     params={}, timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        if not isinstance(p, dict) or p.get("type") != "standard":
+            return None
+        extract = (p.get("extract") or "").strip()
+        return extract or None
+
+
 class PhotonGeocoder:
     """Keyless komoot Photon — last-resort halt geocoder (rare names)."""
 

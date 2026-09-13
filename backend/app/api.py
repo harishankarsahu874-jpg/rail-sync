@@ -36,6 +36,28 @@ def health():
             "catalogue": catalog.stats()}
 
 
+@router.get("/station/{code}")
+def station(code: str, name: str = Query("", max_length=80), train: str = Query("", max_length=8)):
+    """Station dossier: photo, encyclopedia summary, every catalogued service
+    that calls here — for ANY station of ANY of the 5,139 catalogued trains."""
+    pretty = name.upper() or code.upper()
+    media = _manager.station_info(code.upper(), pretty)
+    services = catalog.trains_at(code)
+    if services:
+        summary = media.get("summary") or (
+            f"{pretty.title()} ({code.upper()}) is a scheduled halt on {len(services)} catalogued "
+            f"Indian Railways services in the uploaded timetable, including "
+            + ", ".join(f"{s['number']} {s['name']}" for s in services[:3]) + ".")
+    else:
+        summary = media.get("summary") or f"{pretty.title()} ({code.upper()}) appears on the uploaded Indian timetable."
+    return {
+        "code": code.upper(), "name": pretty.title(),
+        "image": media.get("image"), "summary": summary,
+        "services_count": catalog.count_at(code), "services": services,
+        "train": train or None,
+    }
+
+
 @router.get("/trains")
 def trains(q: str = Query("", min_length=1, max_length=60), limit: int = Query(8, ge=1, le=25)):
     """Search EVERY catalogued train in India (5,139 services, full routes)."""
