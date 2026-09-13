@@ -149,7 +149,7 @@ function Hero() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Any Indian train — number or name (5,208 catalogued)"
+            placeholder="Any Indian train — number or name (5,139 catalogued)"
             aria-label="Search train"
           />
           <button type="submit">Track live</button>
@@ -190,7 +190,7 @@ function Hero() {
       <div className="wrap hero-inner" style={{ paddingTop: 8 }}>
         <div className="grid-companion" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           {[
-            ['RailRadar + 5,208-train catalogue', 'Live position, speed & delay for running services; full scheduled route board for every catalogued train.'],
+            ['RailRadar + 5,139-train catalogue', 'Live position, speed & delay for running services; full scheduled route board for every catalogued train.'],
             ['Random-Forest dynamic ETA', 'Final ETA = schedule + live delay + RF-predicted drift, with the model card published in-app.'],
             ['OSM + Geoapify + MapTiler', 'Track snapping on real mapped rail, place names at the fix, vector basemap with free-tile fallback.'],
           ].map(([title, body]) => (

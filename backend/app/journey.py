@@ -2,7 +2,7 @@
 
 Sources joined per request:
   RailRadar      live fix, speed, delay, running state
-  catalogue      FULL ordered route (all stations, scheduled times) for 5,208 trains
+  catalogue      FULL ordered route (all stations, scheduled times) for 5,139 trains
   Overpass       OSM track snap of the raw fix (± guard)
   OpenWeather    weather at the fix + next halts
   Nominatim      keyless halt geocoding (for stop weather)
@@ -149,7 +149,7 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
         "model": ml.model_card(),
         "catalogue": {"in_catalogue": cat is not None,
                       "stops": len(halts),
-                      "source": "uploaded Indian timetable (5,208 services)"},
+                      "source": f"uploaded Indian timetable ({catalog.stats()['trains']:,} services)"},
         "providers": manager.public_status(),
         "fetched_at": time.time(),
     }

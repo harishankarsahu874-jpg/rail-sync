@@ -1,4 +1,4 @@
-"""Uploaded Indian timetable catalogue (5,208 services, ordered routes).
+"""Uploaded Indian timetable catalogue (5,139 services, ordered routes).
 
 Loaded lazily from the committed gzip parts on first use. Powers:
   * search over EVERY catalogued train in India,

@@ -38,7 +38,7 @@ def health():
 
 @router.get("/trains")
 def trains(q: str = Query("", min_length=1, max_length=60), limit: int = Query(8, ge=1, le=25)):
-    """Search EVERY catalogued train in India (5,208 services, full routes)."""
+    """Search EVERY catalogued train in India (5,139 services, full routes)."""
     return {"query": q, "results": catalog.search(q, limit)}
 
 
