@@ -1,0 +1,16 @@
+# Render blueprint: one web service, ZERO required environment variables.
+# All provider keys ship in the committed .env.production (see its header).
+services:
+  - type: web
+    name: railsync-live
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      # Optional overrides only — delete/leave empty and the app still runs.
+      - key: RAILRADAR_API_KEY
+        sync: false
+      - key: OPENWEATHER_API_KEY
+        sync: false
+      - key: OPENTOPOGRAPHY_API_KEY
+        sync: false
