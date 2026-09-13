@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Route, Routes, Link, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
 import Journey from './components/Journey.jsx';
+import Login from './components/Login.jsx';
 
 const TRAIN_ICON = (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,7 +81,7 @@ function CursorFX() {
   return <div ref={ref} className="cursor-glow" aria-hidden="true" />;
 }
 
-function TopBar() {
+function TopBar({ session, onSignOut }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -93,6 +94,12 @@ function TopBar() {
         </Link>
         <span className="topbar-spacer" />
         <span className="chip chip-teal"><span className="dot" />LIVE</span>
+        {session && (
+          <span className="chip chip-plain topbar-user" title={`signed in via ${session.mode}`}>
+            👤 {session.name}
+            <button type="button" className="topbar-signout" onClick={onSignOut} title="Sign out">×</button>
+          </span>
+        )}
       </div>
     </header>
   );
@@ -226,11 +233,36 @@ function Hero() {
   );
 }
 
+function readSession() {
+  try {
+    const raw = localStorage.getItem('railsync_session') || sessionStorage.getItem('railsync_session');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
+  const [session, setSession] = useState(readSession);
+  const signOut = () => {
+    try {
+      localStorage.removeItem('railsync_session');
+      sessionStorage.removeItem('railsync_session');
+    } catch { /* ignore */ }
+    setSession(null);
+  };
+  if (!session) {
+    return (
+      <>
+        <CursorFX />
+        <Login onDone={setSession} />
+      </>
+    );
+  }
   return (
     <>
       <CursorFX />
-      <TopBar />
+      <TopBar session={session} onSignOut={signOut} />
       <Routes>
         <Route path="/" element={<Hero />} />
         <Route path="/train/:number" element={<Journey />} />
