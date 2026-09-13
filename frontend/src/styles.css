@@ -175,3 +175,60 @@ body {
 .footer a { color: var(--muted); }
 .error-card { border-color: #fecdd3; background: #fff1f2; color: var(--rose); }
 .skeleton { color: var(--faint); padding: 40px; text-align: center; }
+
+/* ------------------------------------------------- railway hero + cursor */
+.hero-art { position: absolute; inset: 0; overflow: hidden; pointer-events: none; opacity: .5; }
+.hero-wrap { position: relative; }
+.hero-inner { position: relative; z-index: 1; }
+@media (pointer: fine) {
+  html, body, a, button, input, [role="button"] {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 0 26 26'><circle cx='13' cy='13' r='5.5' fill='none' stroke='%230d9488' stroke-width='2.4'/><circle cx='13' cy='13' r='1.7' fill='%230d9488'/><path d='M13 1.5v4M13 20.5v4M1.5 13h4M20.5 13h4' stroke='%230d9488' stroke-width='1.6' stroke-linecap='round'/></svg>") 13 13, auto;
+  }
+}
+.cursor-glow {
+  position: fixed; z-index: 9999; pointer-events: none; left: 0; top: 0;
+  width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
+  border: 1.6px solid rgba(13, 148, 136, .55);
+  background: radial-gradient(circle, rgba(20, 184, 166, .16), transparent 70%);
+  transition: transform .18s ease, opacity .25s ease; opacity: 0;
+}
+.cursor-glow.on { opacity: 1; }
+.cursor-glow.hot { transform: scale(1.65); border-color: rgba(13, 148, 136, .9); }
+@media (pointer: coarse) { .cursor-glow { display: none; } }
+
+/* ---------------------------------------------------------- station board */
+.led {
+  background: #0b1220; border-radius: 16px; padding: 14px 16px;
+  font-family: var(--mono); color: #fbbf24; overflow: hidden;
+}
+.led-head {
+  display: grid; grid-template-columns: 34px 64px 1fr 74px 86px 92px;
+  gap: 10px; font-size: 10px; letter-spacing: .14em; color: #64748b; padding: 4px 6px 8px;
+  border-bottom: 1px solid #1e293b;
+}
+.led-row {
+  display: grid; grid-template-columns: 34px 64px 1fr 74px 86px 92px; gap: 10px;
+  align-items: center; padding: 8px 6px; border-bottom: 1px dotted #1e293b;
+  font-size: 12.5px; cursor: pointer; background: none; border-left: 0; border-right: 0;
+  border-top: 0; width: 100%; text-align: left; color: #fbbf24; font-family: var(--mono);
+}
+.led-row:hover { background: #101a2e; }
+.led-row.passed { color: #475569; }
+.led-row.next { color: #34d399; background: #071812; }
+.led-row .st { font-size: 10px; letter-spacing: .1em; }
+.led-detail {
+  grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; padding: 8px 6px 4px;
+  color: #94a3b8; font-size: 11.5px;
+}
+.led-detail .chip { font-family: var(--sans); }
+@media (max-width: 720px) {
+  .led-head, .led-row { grid-template-columns: 28px 52px 1fr 64px 74px; }
+  .led-head > :nth-child(6), .led-row > :nth-child(6) { display: none; }
+}
+.eta-hero {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  background: linear-gradient(120deg, #f0fdfa, #ffffff); border: 1px solid #99f6e4;
+  border-radius: 16px; padding: 14px 18px; margin-top: 16px;
+}
+.eta-hero .big { font-family: var(--mono); font-size: 30px; font-weight: 700; color: var(--teal-ink); }
+.eta-hero .parts { font-size: 11.5px; color: var(--muted); }

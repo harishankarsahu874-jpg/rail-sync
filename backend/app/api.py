@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import config, journey
+from . import catalog, config, journey
 from .providers.manager import ProviderManager
 
 router = APIRouter(prefix="/api")
@@ -32,7 +32,24 @@ def set_manager(manager: ProviderManager):
 def health():
     return {"ok": True, "service": "railsync-live",
             "providers_configured": sum(1 for row in _manager.public_status()["items"].values()
-                                         if row["configured"])}
+                                         if row["configured"]),
+            "catalogue": catalog.stats()}
+
+
+@router.get("/trains")
+def trains(q: str = Query("", min_length=1, max_length=60), limit: int = Query(8, ge=1, le=25)):
+    """Search EVERY catalogued train in India (5,208 services, full routes)."""
+    return {"query": q, "results": catalog.search(q, limit)}
+
+
+@router.get("/running")
+def running():
+    """Trains RailSync users have observed RUNNING during this server boot.
+
+    RailRadar exposes no fleet list and quota forbids polling all of India,
+    so this strip is opportunistic and labelled as observed, not claimed.
+    """
+    return {"observed": _manager.observed()}
 
 
 @router.get("/providers")
@@ -43,12 +60,12 @@ def providers():
 
 @router.get("/search")
 def search(q: str = Query("", min_length=1, max_length=60)):
-    """Train-number passthrough + curated name suggestions."""
+    """Train-number passthrough + full-catalogue name/number suggestions."""
     needle = q.strip().lower()
-    hits = [{"number": n, "name": name} for n, name in DIRECTORY
-            if needle in n or needle in name.lower()]
+    hits = catalog.search(needle, 8)
     if needle.isdigit():
-        hits.insert(0, {"number": needle, "name": f"Train {needle} (live lookup)"})
+        hits.insert(0, {"number": needle, "name": f"Train {needle} (live lookup)",
+                        "type": "", "from": "", "to": "", "km": 0, "days": "", "stops": 0})
     return {"query": q, "results": hits[:8]}
 
 

@@ -34,6 +34,8 @@ export default function Journey() {
   const [error, setError] = useState('');
   const [place, setPlace] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
+  const [openStop, setOpenStop] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -155,6 +157,26 @@ export default function Journey() {
           <div className="stat"><div className="k">ETA next</div>
             <div className="v" style={{ fontSize: 15 }}>{fmtMin(upcoming[0]?.eta_min)}</div></div>
         </div>
+
+        {upcoming[0]?.eta_final_min != null && (
+          <div className="eta-hero">
+            <div>
+              <div className="faint" style={{ fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase' }}>
+                Predicted arrival · {upcoming[0].name}
+              </div>
+              <div className="big">{fmtMin(upcoming[0].eta_final_min)}</div>
+            </div>
+            <div className="parts">
+              = scheduled <span className="mono">{upcoming[0].sched || '—'}</span>
+              {' '}+ live delay <span className="mono">{Math.round(train.delay_min)} min</span>
+              {' '}+ RF drift <span className="mono">{upcoming[0].drift_min > 0 ? '+' : ''}{upcoming[0].drift_min} min</span>
+              <div style={{ marginTop: 6 }}>
+                <span className="chip chip-teal">RANDOM FOREST · holdout MAE {data.model?.holdout_mae_min} min</span>
+                <span className="chip chip-plain">{data.model?.trained_rows} training rows</span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid-companion" style={{ marginTop: 18 }}>
@@ -212,6 +234,64 @@ export default function Journey() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="panel panel-pad">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div>
+                <div className="card-title">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 21V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v15" /><path d="M2 21h20" /><path d="M8 8h8" /><path d="M8 12h8" /></svg>
+                  Station board · full route
+                </div>
+                <div className="card-sub">
+                  {halts.length} stations · uploaded Indian timetable + live ETA overlay ·
+                  {' '}{data?.catalogue?.in_catalogue ? 'in catalogue' : 'RailRadar route'}
+                </div>
+              </div>
+              <button type="button" className="try-chip" onClick={() => setBoardOpen((v) => !v)}>
+                {boardOpen ? 'Hide board' : `Show all ${halts.length} stations`}
+              </button>
+            </div>
+            {boardOpen && (
+              <div className="led" style={{ marginTop: 12 }}>
+                <div className="led-head">
+                  <span>#</span><span>CODE</span><span>STATION</span><span>SCHED</span><span>ETA FINAL</span><span>STATUS</span>
+                </div>
+                {halts.map((halt) => (
+                  <React.Fragment key={`${halt.seq}-${halt.code || halt.name}`}>
+                    <button
+                      type="button"
+                      className={`led-row ${halt.passed ? 'passed' : ''} ${halt.next ? 'next' : ''}`}
+                      onClick={() => setOpenStop((s) => (s === halt.seq ? null : halt.seq))}
+                    >
+                      <span>{halt.seq}</span>
+                      <span>{halt.code || '—'}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{halt.name}</span>
+                      <span>{halt.sched || '—'}</span>
+                      <span style={{ color: halt.passed ? undefined : '#34d399' }}>
+                        {halt.passed ? '—' : fmtMin(halt.eta_final_min ?? halt.eta_min)}
+                      </span>
+                      <span className="st">{halt.passed ? 'PASSED' : halt.next ? 'NEXT' : 'UPCOMING'}</span>
+                    </button>
+                    {openStop === halt.seq && (
+                      <div className="led-detail">
+                        <span>📏 {Math.round(halt.distance_km)} km from origin</span>
+                        {halt.day > 1 && <span>🗓 journey day {halt.day}</span>}
+                        {!halt.passed && halt.drift_min != null && (
+                          <span>🤖 RF drift {halt.drift_min > 0 ? '+' : ''}{halt.drift_min} min</span>
+                        )}
+                        {halt.weather && (
+                          <span className="chip chip-plain">
+                            {Math.round(halt.weather.temperature_c)}° · {halt.weather.condition} · RH {halt.weather.humidity_pct}%
+                          </span>
+                        )}
+                        {!halt.weather && !halt.passed && <span>stop weather: geocode/pending or unavailable</span>}
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

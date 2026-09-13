@@ -39,6 +39,7 @@ class ProviderManager:
         self.nominatim = NominatimClient()
         self._lock = threading.RLock()
         self._cache: dict[str, tuple[float, object]] = {}
+        self._observed: dict[str, dict] = {}
         self._status = {}
         for key, (label, purpose) in {**_SERVER_PROVIDERS, **_BROWSER_PROVIDERS}.items():
             configured = self._configured(key)
@@ -49,6 +50,22 @@ class ProviderManager:
             }
 
     # ------------------------------------------------------------------ status
+    def observe(self, number: str, name: str):
+        """Remember trains confirmed RUNNING by RailRadar during this boot.
+
+        RailRadar has no fleet-list endpoint and the free sandbox quota forbids
+        polling everything, so the 'running now' strip grows opportunistically
+        from journeys users actually open. Honest by construction.
+        """
+        with self._lock:
+            self._observed[str(number)] = {"number": str(number), "name": name,
+                                           "last_seen": time.time()}
+
+    def observed(self, limit: int = 12) -> list[dict]:
+        with self._lock:
+            rows = sorted(self._observed.values(), key=lambda r: r["last_seen"], reverse=True)
+        return rows[:limit]
+
     def _configured(self, key: str) -> bool:
         return {
             "railradar": self.railradar.configured,

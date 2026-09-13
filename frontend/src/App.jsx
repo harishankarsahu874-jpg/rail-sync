@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Route, Routes, Link, useNavigate } from 'react-router-dom';
 import { api } from './api.js';
 import Journey from './components/Journey.jsx';
@@ -9,6 +9,76 @@ const TRAIN_ICON = (
     <circle cx="8.5" cy="14.5" r="1" fill="currentColor" /><circle cx="15.5" cy="14.5" r="1" fill="currentColor" />
   </svg>
 );
+
+/** Perspective railway artwork behind the hero: tracks, sleepers, catenary. */
+function RailwayArt() {
+  return (
+    <div className="hero-art" aria-hidden="true">
+      <svg width="100%" height="100%" viewBox="0 0 1200 520" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#f6faf9" /><stop offset="1" stopColor="#e7f5f2" />
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="520" fill="url(#sky)" />
+        {/* sleepers */}
+        {Array.from({ length: 14 }).map((_, i) => {
+          const t = i / 14;
+          const y = 210 + Math.pow(t, 1.9) * 310;
+          const half = 8 + Math.pow(t, 1.8) * 330;
+          return <rect key={i} x={600 - half} y={y} width={half * 2} height={2 + t * 7} rx="2" fill="#0d9488" opacity={0.10 + t * 0.10} />;
+        })}
+        {/* rails */}
+        <path d="M600 208 L260 520" stroke="#0f766e" strokeWidth="3.4" opacity=".5" fill="none" />
+        <path d="M600 208 L940 520" stroke="#0f766e" strokeWidth="3.4" opacity=".5" fill="none" />
+        <path d="M600 208 L470 520" stroke="#14b8a6" strokeWidth="1.6" opacity=".35" fill="none" />
+        <path d="M600 208 L730 520" stroke="#14b8a6" strokeWidth="1.6" opacity=".35" fill="none" />
+        {/* catenary masts */}
+        {[150, 330, 870, 1050].map((x, i) => (
+          <g key={x} stroke="#94a3b8" strokeWidth="2" opacity=".4">
+            <path d={`M${x} ${520 - i * 8} V ${300 - i * 14}`} />
+            <path d={`M${x} ${308 - i * 14} h ${x < 600 ? 46 : -46}`} />
+          </g>
+        ))}
+        {/* distant train silhouette */}
+        <g opacity=".5" transform="translate(588 176)">
+          <rect x="0" y="0" width="24" height="14" rx="4" fill="#0f766e" />
+          <rect x="3" y="3" width="5" height="5" rx="1" fill="#e7f5f2" />
+          <rect x="10" y="3" width="5" height="5" rx="1" fill="#e7f5f2" />
+          <circle cx="6" cy="16" r="2.4" fill="#334155" /><circle cx="18" cy="16" r="2.4" fill="#334155" />
+        </g>
+        <circle cx="600" cy="208" r="26" fill="#14b8a6" opacity=".12" />
+      </svg>
+    </div>
+  );
+}
+
+/** Soft teal ring that follows the pointer and grows over interactive bits. */
+function CursorFX() {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (window.matchMedia('(pointer: coarse)').matches) return undefined;
+    const move = (e) => {
+      const el = ref.current;
+      if (!el) return;
+      el.style.transform = `translate(${e.clientX}px, ${e.clientY}px) ${el.classList.contains('hot') ? 'scale(1.65)' : ''}`;
+      el.style.left = '0px';
+      el.style.top = '0px';
+      el.classList.add('on');
+      el.style.marginLeft = `${e.clientX - 17}px`;
+      el.style.marginTop = `${e.clientY - 17}px`;
+      el.style.transform = '';
+    };
+    const over = (e) => {
+      const hot = e.target.closest?.('a, button, input, [role="button"], .led-row, .try-chip');
+      ref.current?.classList.toggle('hot', Boolean(hot));
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseover', over);
+    return () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseover', over); };
+  }, []);
+  return <div ref={ref} className="cursor-glow" aria-hidden="true" />;
+}
 
 function TopBar() {
   return (
@@ -39,6 +109,15 @@ function Hero() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [runningNow, setRunningNow] = useState([]);
+
+  useEffect(() => {
+    api.get('/api/running').then((d) => setRunningNow(d.observed || [])).catch(() => {});
+    const handle = setInterval(() => {
+      api.get('/api/running').then((d) => setRunningNow(d.observed || [])).catch(() => {});
+    }, 60_000);
+    return () => clearInterval(handle);
+  }, []);
 
   useEffect(() => {
     if (query.trim().length < 2) { setResults([]); return undefined; }
@@ -53,14 +132,15 @@ function Hero() {
   const go = (number) => navigate(`/train/${number}`);
 
   return (
-    <div>
-      <section className="hero">
+    <div className="hero-wrap">
+      <RailwayArt />
+      <section className="hero hero-inner">
         <span className="chip chip-live"><span className="dot" />HYBRID LIVE PROVIDERS</span>
         <h1>Where is your train, right now?<span>Down to the track it stands on.</span></h1>
         <p>
           RailSync fuses live Indian Railways telemetry with weather, terrain,
-          OpenStreetMap track geometry and reverse geocoding — one honest,
-          explainable journey view.
+          OpenStreetMap track geometry and a Random-Forest ETA model —
+          one honest, explainable journey view for every catalogued train in India.
         </p>
         <form className="searchbox" onSubmit={(e) => { e.preventDefault(); if (query.trim()) go(query.trim()); }}>
           <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round">
@@ -69,7 +149,7 @@ function Hero() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Train number or name — e.g. 12841, Coromandel"
+            placeholder="Any Indian train — number or name (5,208 catalogued)"
             aria-label="Search train"
           />
           <button type="submit">Track live</button>
@@ -80,6 +160,9 @@ function Hero() {
               <button key={row.number} type="button" onClick={() => go(row.number)}>
                 <span className="mono" style={{ color: 'var(--teal-ink)', fontWeight: 600 }}>{row.number}</span>
                 <span>{row.name}</span>
+                <span className="faint" style={{ marginLeft: 'auto', fontSize: 11 }}>
+                  {row.from}→{row.to} · {row.stops} stops
+                </span>
               </button>
             ))}
           </div>
@@ -92,14 +175,24 @@ function Hero() {
             </button>
           ))}
         </div>
+        {runningNow.length > 0 && (
+          <div className="try-row" style={{ marginTop: 18 }}>
+            <span className="chip chip-live"><span className="dot" />OBSERVED RUNNING NOW</span>
+            {runningNow.map((row) => (
+              <button key={row.number} type="button" className="try-chip" onClick={() => go(row.number)}>
+                {row.number} · {row.name}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
 
-      <div className="wrap" style={{ paddingTop: 8 }}>
+      <div className="wrap hero-inner" style={{ paddingTop: 8 }}>
         <div className="grid-companion" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
           {[
-            ['RailRadar', 'Live position, speed & delay straight from Indian Railways telemetry.'],
-            ['OpenWeather + OpenTopography', 'Live weather severity and COP30 elevation at the exact fix.'],
-            ['OSM + Geoapify + MapTiler', 'Track snapping on real mapped rail, place names, vector basemap.'],
+            ['RailRadar + 5,208-train catalogue', 'Live position, speed & delay for running services; full scheduled route board for every catalogued train.'],
+            ['Random-Forest dynamic ETA', 'Final ETA = schedule + live delay + RF-predicted drift, with the model card published in-app.'],
+            ['OSM + Geoapify + MapTiler', 'Track snapping on real mapped rail, place names at the fix, vector basemap with free-tile fallback.'],
           ].map(([title, body]) => (
             <div key={title} className="panel panel-pad">
               <div className="card-title">{title}</div>
@@ -108,8 +201,8 @@ function Hero() {
           ))}
         </div>
         <div className="footer">
-          RailSync Live · hackathon prototype · telemetry © RailRadar, map data © OpenStreetMap
-          contributors, elevation © OpenTopography / Open-Meteo · not for operational use
+          RailSync Live · hackathon prototype · telemetry © RailRadar, timetable catalogue uploaded,
+          map data © OpenStreetMap contributors, elevation © OpenTopography / Open-Meteo · not for operational use
         </div>
       </div>
     </div>
@@ -119,6 +212,7 @@ function Hero() {
 export default function App() {
   return (
     <>
+      <CursorFX />
       <TopBar />
       <Routes>
         <Route path="/" element={<Hero />} />
