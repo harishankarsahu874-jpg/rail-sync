@@ -149,6 +149,26 @@ export default function LiveTrackingPage({ state, mode, refreshState }) {
   const providerReported = train.position_source === 'railradar_reported';
   const providerLive = train.position_source?.startsWith('railradar_');
   const railRadarConfigured = Boolean(state.providers?.items?.railradar?.configured);
+
+  // Viewer-driven live sync: opening a train's live page pulls a fresh
+  // RailRadar fix and keeps re-pulling every 5 minutes while the page stays
+  // open. The server-side 5-minute cache caps this at one provider call per
+  // interval per viewed train, so the free sandbox quota stays protected even
+  // with RAILRADAR_AUTO_SYNC=false.
+  useEffect(() => {
+    if (!railRadarConfigured || !number) return undefined;
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) syncRailRadar();
+    };
+    const kickoff = setTimeout(run, 1200);
+    const interval = setInterval(run, 300_000);
+    return () => {
+      cancelled = true;
+      clearTimeout(kickoff);
+      clearInterval(interval);
+    };
+  }, [number, railRadarConfigured, syncRailRadar]);
   const status = trainStatus(train);
   const currentSection = train.at_station
     ? train.last_station_name
@@ -220,6 +240,14 @@ export default function LiveTrackingPage({ state, mode, refreshState }) {
                   <RefreshCw size={10} className={syncingRailRadar ? 'animate-spin' : ''} />
                   {syncingRailRadar ? 'SYNCING…' : 'REFRESH RAILRADAR'}
                 </button>
+                {railRadarConfigured && (
+                  <span
+                    className="text-[10px] font-medium text-slate-400"
+                    title="Server-cached: at most one RailRadar call per 5 minutes per viewed train"
+                  >
+                    auto-syncs while this page is open
+                  </span>
+                )}
               </div>
               <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">{train.name}</h1>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-slate-500">

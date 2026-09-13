@@ -41,19 +41,39 @@ function stationGeoJSON(state) {
   };
 }
 
+// MapTiler vector schemas have exposed the rail network under different
+// source-layer names over time ("railway" in some styles, the OpenMapTiles
+// style "transportation" with class=rail in others). Accept both so the
+// mapped-rail snap keeps working across style/schema versions.
+const RAIL_SOURCE_LAYERS = ['railway', 'transportation'];
+const RAIL_CLASSES = ['rail', 'narrow_gauge', 'rack'];
+
 function railwaySource(map) {
   const style = map.getStyle();
-  const baseRailLayer = (style?.layers || []).find((layer) => layer['source-layer'] === 'railway');
-  const sourceId = baseRailLayer?.source;
-  if (!sourceId || style?.sources?.[sourceId]?.type !== 'vector') return null;
-  return { sourceId, sourceLayer: baseRailLayer['source-layer'] };
+  const layers = style?.layers || [];
+  for (const sourceLayer of RAIL_SOURCE_LAYERS) {
+    const baseRailLayer = layers.find((layer) => layer['source-layer'] === sourceLayer);
+    const sourceId = baseRailLayer?.source;
+    if (sourceId && style?.sources?.[sourceId]?.type === 'vector') {
+      return { sourceId, sourceLayer, classFiltered: sourceLayer === 'transportation' };
+    }
+  }
+  return null;
+}
+
+function isRailFeature(sourceLayer, feature) {
+  if (sourceLayer !== 'transportation') return true;
+  return RAIL_CLASSES.includes(feature?.properties?.class);
 }
 
 function loadedRailFeatures(map) {
   const source = railwaySource(map);
   if (!source || map.getZoom() < 6) return [];
   try {
-    return map.querySourceFeatures(source.sourceId, { sourceLayer: source.sourceLayer });
+    const features = map.querySourceFeatures(source.sourceId, { sourceLayer: source.sourceLayer });
+    return source.classFiltered
+      ? features.filter((feature) => isRailFeature(source.sourceLayer, feature))
+      : features;
   } catch {
     return [];
   }
@@ -68,6 +88,16 @@ function ensureBaseRailOverlay(map) {
   // MapTiler hybrid-v4 contains railway vectors from zoom 6, but its stock
   // style does not draw them until zoom 11. These two contrast layers expose
   // the real mapped railway at corridor zoom without inventing geometry.
+  // Declaring minzoom 6 here also forces the vector tiles to load early
+  // enough for the mapped-rail snap to have features to snap against.
+  const geometryFilter = ['==', ['geometry-type'], 'LineString'];
+  const notUnderConstruction = ['any',
+    ['==', ['get', 'construction'], false], ['!', ['has', 'construction']]];
+  const railFilter = sourceLayer === 'transportation'
+    ? ['all', geometryFilter,
+      ['in', ['get', 'class'], ['literal', RAIL_CLASSES]], notUnderConstruction]
+    : ['all', geometryFilter, notUnderConstruction];
+
   map.addLayer({
     id: 'railsync-actual-rail-casing',
     type: 'line',
@@ -80,10 +110,7 @@ function ensureBaseRailOverlay(map) {
       'line-width': ['interpolate', ['linear'], ['zoom'], 6, 2.2, 10, 3.4, 14, 5.2],
       'line-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0.68, 9, 0.84],
     },
-    filter: ['all',
-      ['==', ['geometry-type'], 'LineString'],
-      ['any', ['==', ['get', 'construction'], false], ['!', ['has', 'construction']]],
-    ],
+    filter: railFilter,
   });
   map.addLayer({
     id: 'railsync-actual-rail',
@@ -97,10 +124,7 @@ function ensureBaseRailOverlay(map) {
       'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.8, 10, 1.3, 14, 2.1],
       'line-opacity': ['interpolate', ['linear'], ['zoom'], 6, 0.78, 9, 0.96],
     },
-    filter: ['all',
-      ['==', ['geometry-type'], 'LineString'],
-      ['any', ['==', ['get', 'construction'], false], ['!', ['has', 'construction']]],
-    ],
+    filter: railFilter,
   });
 }
 
@@ -369,6 +393,13 @@ export default function LiveRailMap({ state, selected, onSelect, onInspect, onPo
       });
 
     let fellBack = false;
+    let tileErrors = 0;
+    let tileErrorWindowStart = 0;
+    const fallbackToOsm = (reason) => {
+      fellBack = true;
+      setMapError(reason);
+      map.setStyle(mapStyle(true));
+    };
     let markerFrame = null;
     const scheduleMarkerUpdate = () => {
       if (markerFrame != null) return;
@@ -394,13 +425,25 @@ export default function LiveRailMap({ state, selected, onSelect, onInspect, onPo
     };
     map.on('load', install);
     map.on('style.load', install);
-    map.on('error', (event) => {
-      // An invalid/restricted MapTiler key must not blank the demo. Fall back
-      // once to the OSM raster style; later tile errors are harmless.
-      if (MAPTILER_KEY && !fellBack && !map.isStyleLoaded()) {
-        fellBack = true;
-        setMapError('MapTiler unavailable — showing OSM fallback');
-        map.setStyle(mapStyle(true));
+    map.on('error', () => {
+      // An invalid/restricted MapTiler key must not blank the demo. Two failure
+      // shapes exist: the style JSON itself is rejected (key revoked or
+      // origin-blocked), or the style loads but every tile is rejected
+      // (quota exhausted / usage-restricted key). Catch both, fall back once
+      // to the OSM raster style; later errors are then harmless.
+      if (!MAPTILER_KEY || fellBack) return;
+      if (!map.isStyleLoaded()) {
+        fallbackToOsm('MapTiler style rejected — showing OSM fallback');
+        return;
+      }
+      const now = Date.now();
+      if (now - tileErrorWindowStart > 30_000) {
+        tileErrorWindowStart = now;
+        tileErrors = 0;
+      }
+      tileErrors += 1;
+      if (tileErrors >= 8) {
+        fallbackToOsm('MapTiler tiles rejected (key restricted or quota exceeded) — showing OSM fallback');
       }
     });
     const handleRailSourceData = (event) => {

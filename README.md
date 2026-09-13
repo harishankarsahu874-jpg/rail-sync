@@ -421,3 +421,59 @@ A station display board or mobile app could consume `GET /api/stations/{code}/bo
   ETA leg lengths remain geographic × track-factor and scaled to published end-to-end km.
 * The source's 293 missing/zero coordinate records remain searchable but cannot be plotted.
 * Sim clock starts 09:30 IST on boot day; ×4 speed by default (1 real hour ≈ 4 rail hours).
+
+## Going fully live on Render (API checklist)
+
+RailSync degrades gracefully: every missing or rejected key becomes a visible
+"fallback" chip instead of an error. To move from *hybrid demo* to *all providers
+live*, configure the following in the Render dashboard
+(Service → Environment) and redeploy.
+
+### Server-side keys (read by FastAPI at boot)
+
+| Variable | Provider | Notes |
+| --- | --- | --- |
+| `RAILRADAR_API_KEY` | railradar.in live telemetry | Bearer key. Demand-refresh + viewer auto-sync use a 5-min server cache. |
+| `OPENWEATHER_API_KEY` | OpenWeather current weather | Polled for every active train cell; 10-min cache. |
+| `OPENTOPOGRAPHY_API_KEY` | OpenTopography COP30 elevation | Called on demand from the Terrain tab / map-click context (`/api/geo/context`); 30-day cache. |
+| `OVERPASS_URL` | Overpass OSM | No key needed; leave the default. |
+
+### Browser keys (Vite embeds these **at build time**)
+
+`VITE_*` values are compiled into the public JavaScript bundle. Updating them on
+Render only takes effect on the **next deploy**, because Render runs the Vite
+build during deployment. Never expect a runtime restart to change them.
+
+| Variable | Provider | Notes |
+| --- | --- | --- |
+| `VITE_MAPTILER_API_KEY` | MapTiler vector basemap | Create a **fresh free key** at cloud.maptiler.com if the old one returns `403 Key usage restricted`. Origin-restrict it to your Render domain (+ `http://localhost:5173` for dev). |
+| `VITE_MAPTILER_STYLE` | basemap style slug | `basic-v2-dark` (default) or `hybrid-v4` (draws railway vectors from zoom 6). |
+| `VITE_GEOAPIFY_API_KEY` | Geoapify reverse geocoding | Origin-restrict in the Geoapify dashboard. |
+
+> **Key hygiene:** browser keys are public by design — anyone can read them from
+> the bundle. Origin restrictions in the provider dashboards are what stop a
+> scraped key from being abused elsewhere. Rotate any key that ever shipped in
+> an unrestricted build.
+
+### RailRadar quota math (free sandbox = 1,000 calls/month)
+
+* `RAILRADAR_AUTO_SYNC=false` (default, recommended on free plans): fleet-wide
+  background polling stays off. Live pages now sync themselves — one cached call
+  when a train's live page opens, then one per 5 minutes while it stays open.
+  A two-hour judging session costs ≈ 24 calls.
+* `RAILRADAR_AUTO_SYNC=true` polls **all six** trains every
+  `RAILRADAR_POLL_SECONDS` (min 60). At 900 s that is ≈ 17,280 calls/month —
+  paid plans only.
+
+### What this revision fixed
+
+* **Blank dark map:** a restricted/quota-exceeded MapTiler key used to blank the
+  map whenever the style JSON still loaded but tiles were rejected. The map now
+  counts tile errors and switches to the OSM/CARTO raster fallback with a banner.
+* **Live telemetry on page open:** `/live/<train>` triggers a cached RailRadar
+  sync automatically (plus every 5 min while open), so the workspace no longer
+  opens in pure simulation between manual refreshes.
+* **Mapped-rail snap compatibility:** rail vectors are now recognised under both
+  MapTiler schema names (`railway`, and `transportation` filtered to
+  `class=rail`), and the overlay layers force vector tiles from zoom 6 so the
+  snap guard has features to match against at corridor zoom.
