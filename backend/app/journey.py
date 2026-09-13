@@ -37,7 +37,6 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
     running = status == "running" and is_live
     delay = _f(data.get("delayMinutes"))
     loc = data.get("currentLocation") or {}
-    raw_coords = _coords(loc.get("coordinates"))
     speed = _f(loc.get("speedKmh"))
     train_meta = data.get("train") or {}
 
@@ -68,35 +67,25 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
         # catalogue board: trust the clock over (interpolated) distances
         _mark_by_clock(halts, delay, data)
 
-    # --- live position + honest OSM track snap -------------------------------
-    position = None
-    if raw_coords and running:
-        snap = manager.snap_to_rail(raw_coords[0], raw_coords[1])
-        inside = snap is not None
-        position = {
-            "lat": round(snap["lat"], 6) if inside else raw_coords[0],
-            "lng": round(snap["lng"], 6) if inside else raw_coords[1],
-            "snapped": inside,
-            "offset_m": snap["offset_m"] if inside else None,
-            "source": "osm_track_snap" if inside else "provider_raw",
-            "raw_lat": raw_coords[0], "raw_lng": raw_coords[1],
-            "track": snap["track"] if inside else None,
-        }
-
-    weather = manager.weather_at(position["lat"], position["lng"]) if position else None
-    cop30 = manager.cop30_at(position["lat"], position["lng"]) if position else None
+    # --- slow providers come from the background enrichment cache ------------
+    enr = manager.enrichment(number)
+    position = (enr or {}).get("position")
+    weather = (enr or {}).get("weather")
+    cop30 = (enr or {}).get("cop30")
+    profile = (enr or {}).get("profile") or {"points": [], "elevations": []}
     current_severity = (weather or {}).get("severity", 0.0) or 0.0
+    if enr:
+        for halt in halts:
+            geo = enr["geo"].get(str(halt["seq"]))
+            if geo:
+                halt["lat"], halt["lng"] = geo["lat"], geo["lng"]
+            wx = enr["halt_wx"].get(str(halt["seq"]))
+            if wx:
+                halt["weather"] = wx
 
-    # --- upcoming stops: geocode + weather + RF drift + final ETA ------------
+    # --- upcoming stops: RF drift + final ETA (instant; weather upgrades later)
     upcoming = [h for h in halts if not h["passed"]]
     if running:
-        for index, halt in enumerate(upcoming[:4]):
-            if halt.get("lat") is None:
-                geo = manager.geocode_halt(halt["name"])
-                if geo:
-                    halt["lat"], halt["lng"] = geo["lat"], geo["lng"]
-            if index < 3 and halt.get("lat") is not None:
-                halt["weather"] = manager.weather_at(halt["lat"], halt["lng"])
         for halt in upcoming:
             if halt["sched_min"] is None:
                 continue
@@ -109,18 +98,15 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
                 weather_severity=severity, scheduled_min=halt["sched_min"])
             halt["eta_final_min"] = round(halt["eta_min"] + halt["drift_min"], 1)
 
-    # --- elevation profile: fix → next three halts ---------------------------
-    profile = {"points": [], "elevations": []}
-    if position and upcoming:
-        anchors = [(position["lat"], position["lng"])]
-        anchors += [(h["lat"], h["lng"]) for h in upcoming[:3] if h.get("lat") is not None]
-        if len(anchors) >= 2:
-            points = _densify(anchors, max_points=12)
-            profile = {"points": [{"lat": round(a, 5), "lng": round(b, 5)} for a, b in points],
-                       "elevations": manager.elevation_profile(points)}
-
     if running:
         manager.observe(number, train_meta.get("name") or (cat or {}).get("name") or f"Train {number}")
+        manager.start_enrichment(number, [{"seq": h["seq"], "name": h["name"],
+                                           "passed": h["passed"]} for h in halts])
+
+    route_geo = [{"seq": h["seq"], "code": h["code"], "name": h["name"],
+                  "lat": h["lat"], "lng": h["lng"], "passed": h["passed"],
+                  "next": h["next"], "sched": h["sched"], "eta_final_min": h["eta_final_min"]}
+                 for h in halts if h["lat"] is not None]
 
     return {
         "train": {
@@ -147,6 +133,8 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
         "weather": weather,
         "elevation": {"cop30": cop30, "profile": profile},
         "model": ml.model_card(),
+        "enrich": "ready" if enr else "pending",
+        "route_geo": route_geo,
         "catalogue": {"in_catalogue": cat is not None,
                       "stops": len(halts),
                       "source": f"uploaded Indian timetable ({catalog.stats()['trains']:,} services)"},
@@ -250,29 +238,6 @@ def _label(minutes: int | None, day: int) -> str | None:
         return None
     hh, mm = divmod(minutes, 60)
     return f"{hh:02d}:{mm:02d}" + (f" +{day - 1}d" if day > 1 else "")
-
-
-def _densify(anchors, max_points=12):
-    if len(anchors) < 2:
-        return anchors
-    per_leg = max(1, (max_points - len(anchors)) // (len(anchors) - 1) + 1)
-    points = []
-    for i in range(len(anchors) - 1):
-        a, b = anchors[i], anchors[i + 1]
-        for step in range(per_leg):
-            t = step / per_leg
-            points.append((a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t))
-    points.append(anchors[-1])
-    return points[:max_points]
-
-
-def _coords(raw):
-    if not isinstance(raw, dict):
-        return None
-    lat, lng = _f(raw.get("lat", raw.get("latitude")), 999), _f(raw.get("lng", raw.get("lon", raw.get("longitude"))), 999)
-    if not (-90 <= lat <= 90 and -180 <= lng <= 180):
-        return None
-    return (round(lat, 6), round(lng, 6))
 
 
 def _sched(row: dict):

@@ -226,6 +226,49 @@ class NominatimClient:
                 "display": row.get("display_name", "")}
 
 
+class PhotonGeocoder:
+    """Keyless komoot Photon — last-resort halt geocoder (rare names)."""
+
+    name = "Photon"
+
+    configured = True
+
+    def geocode(self, query: str) -> dict | None:
+        p = get_json(self.name, "https://photon.komoot.io/api/",
+                     params={"q": query, "limit": 1, "lang": "en"},
+                     timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        features = (p or {}).get("features") or []
+        if not features:
+            return None
+        coords = features[0].get("geometry", {}).get("coordinates") or []
+        if len(coords) < 2:
+            return None
+        props = features[0].get("properties", {})
+        return {"lat": round(float(coords[1]), 6), "lng": round(float(coords[0]), 6),
+                "display": f"{props.get('name', '')}, {props.get('state', '')}"}
+
+
+class OpenMeteoGeocoder:
+    """Keyless geocoder fallback when Nominatim throttles or misses a halt."""
+
+    name = "Open-Meteo Geocoding"
+
+    configured = True
+
+    def geocode(self, query: str) -> dict | None:
+        p = get_json(self.name, "https://geocoding-api.open-meteo.com/v1/search",
+                     params={"name": query, "count": 1, "language": "en",
+                             "format": "json", "countryCode": "IN"},
+                     timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        results = (p or {}).get("results") or []
+        if not results:
+            return None
+        row = results[0]
+        return {"lat": round(float(row["latitude"]), 6),
+                "lng": round(float(row["longitude"]), 6),
+                "display": f"{row.get('name', '')}, {row.get('admin1', '')}, India"}
+
+
 # --------------------------------------------------------------------- helpers
 def _num(value, default=0.0):
     try:

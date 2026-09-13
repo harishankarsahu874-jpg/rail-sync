@@ -1,11 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api.js';
 import { reverseGeocode } from '../geo.js';
-import MapView from './MapView.jsx';
 
-const POLL_MS = 20_000;
+// The map is a separate chunk: the dashboard paints instantly and pulls the
+// basemap library in behind it.
+const MapView = React.lazy(() => import('./MapView.jsx'));
+
+const POLL_READY_MS = 30_000;   // once background enrichment has landed
+const POLL_PENDING_MS = 3_500;  // while slow providers are still enriching
 
 const fmtMin = (minutes) => {
   if (minutes == null || Number.isNaN(minutes)) return '—';
@@ -36,22 +40,30 @@ export default function Journey() {
   const [refreshing, setRefreshing] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [openStop, setOpenStop] = useState(null);
+  const [reload, setReload] = useState(0);
 
-  const load = useCallback(async () => {
-    try {
-      const view = await api.get(`/api/journey/${number}`);
-      setData(view);
-      setError('');
-    } catch (exc) {
-      setError(exc.message || 'journey unavailable');
-    }
-  }, [number]);
-
+  // Progressive loading: first paint needs only RailRadar + catalogue + RF.
+  // Slow providers (snap, weather, geocode, elevation) enrich server-side in a
+  // background thread; we poll fast until they land, then settle to 30 s.
   useEffect(() => {
-    load();
-    const handle = setInterval(load, POLL_MS);
-    return () => clearInterval(handle);
-  }, [load]);
+    let alive = true;
+    let timer = null;
+    const tick = async () => {
+      try {
+        const view = await api.get(`/api/journey/${number}`);
+        if (!alive) return;
+        setData(view);
+        setError('');
+        timer = setTimeout(tick, view.enrich === 'ready' ? POLL_READY_MS : POLL_PENDING_MS);
+      } catch (exc) {
+        if (!alive) return;
+        setError(exc.message || 'journey unavailable');
+        timer = setTimeout(tick, 12_000);
+      }
+    };
+    tick();
+    return () => { alive = false; if (timer) clearTimeout(timer); };
+  }, [number, reload]);
 
   // Geoapify reverse-geocode of the live fix (browser key, cached per fix).
   useEffect(() => {
@@ -67,8 +79,9 @@ export default function Journey() {
   const refresh = async () => {
     setRefreshing(true);
     try {
-      setData(await api.post(`/api/journey/${number}/refresh`));
+      await api.post(`/api/journey/${number}/refresh`);
       setError('');
+      setReload((r) => r + 1);
     } catch (exc) {
       setError(exc.message || 'refresh failed');
     } finally {
@@ -85,6 +98,10 @@ export default function Journey() {
     const elevations = data?.elevation?.profile?.elevations || [];
     return points.map((p, i) => ({ km: i, m: elevations[i] ?? null }));
   }, [data]);
+  const routeGeo = useMemo(
+    () => (data?.route_geo || []).map((g) => ({ ...g, eta_label: fmtMin(g.eta_final_min) })),
+    [data],
+  );
 
   if (error && !data) {
     return (
@@ -99,9 +116,32 @@ export default function Journey() {
       </div>
     );
   }
-  if (!train) return <div className="wrap skeleton">Contacting RailRadar + 4 more providers…</div>;
+  if (!train) {
+    return (
+      <div className="wrap">
+        <div className="panel panel-pad">
+          <div className="skel" style={{ height: 20, width: 260 }} />
+          <div className="skel" style={{ height: 34, width: '55%', marginTop: 14 }} />
+          <div className="skel" style={{ height: 64, marginTop: 16 }} />
+        </div>
+        <div className="grid-companion" style={{ marginTop: 18 }}>
+          <div className="stack">
+            <div className="panel panel-pad"><div className="skel" style={{ height: 420, borderRadius: 16 }} /></div>
+            <div className="panel panel-pad"><div className="skel" style={{ height: 220 }} /></div>
+          </div>
+          <div className="stack">
+            <div className="panel panel-pad"><div className="skel" style={{ height: 260 }} /></div>
+            <div className="panel panel-pad"><div className="skel" style={{ height: 160 }} /></div>
+          </div>
+        </div>
+        <div className="card-sub" style={{ marginTop: 12 }}>
+          Contacting RailRadar live telemetry + uploaded timetable…
+        </div>
+      </div>
+    );
+  }
 
-  const providers = data.providers?.items || {};
+  const mapReady = Boolean(train.position || routeGeo.length);
 
   return (
     <div className="wrap">
@@ -123,7 +163,7 @@ export default function Journey() {
             <h1 className="j-title" style={{ marginTop: 10 }}>{train.name}</h1>
             <div className="j-sub">
               {train.running
-                ? `Live fix ${train.age_s ?? '?'} s old · updates every ${POLL_MS / 1000} s`
+                ? `Live fix ${train.age_s ?? '?'} s old · auto-updates every ${POLL_READY_MS / 1000} s`
                 : 'This service is not running right now — route shown for reference'}
             </div>
           </div>
@@ -185,13 +225,27 @@ export default function Journey() {
           <div className="panel panel-pad">
             <div className="card-title">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 11l18-8-8 18-2-8z" /></svg>
-              Live position on real mapped track
+              Live route map · exact position, full route
             </div>
             <div className="card-sub">
-              RailRadar fix → Overpass OSM snap (guard ±1.5 km) → MapTiler/CARTO basemap
+              Pulsing marker = live fix (snapped to real OSM track when inside guard) ·
+              teal line = route ahead · dots = every scheduled halt
             </div>
             <div style={{ marginTop: 12 }}>
-              <MapView position={train.position} running={train.running} />
+              {mapReady ? (
+                <Suspense fallback={<div className="skel" style={{ height: 420, borderRadius: 16 }} />}>
+                  <MapView
+                    position={train.position}
+                    running={train.running}
+                    track={train.position?.track || null}
+                    routeGeo={routeGeo}
+                  />
+                </Suspense>
+              ) : (
+                <div className="map-shell map-wait">
+                  <div className="map-wait-label">locating train on the map…</div>
+                </div>
+              )}
             </div>
             {place?.available && (
               <div className="chip chip-plain" style={{ marginTop: 10 }}>
@@ -353,25 +407,6 @@ export default function Journey() {
             </div>
           </div>
 
-          <div className="panel panel-pad">
-            <div className="card-title">Provider health</div>
-            <div className="provider-strip" style={{ marginTop: 10 }}>
-              {Object.entries(providers).map(([key, row]) => (
-                <span
-                  key={key}
-                  className={`chip ${row.mode === 'live' ? 'chip-live' : row.mode === 'browser' ? 'chip-teal' : row.mode === 'degraded' ? 'chip-bad' : 'chip-plain'}`}
-                  title={row.error || row.purpose}
-                >
-                  {row.mode === 'live' && <span className="dot" />}
-                  {row.label}
-                </span>
-              ))}
-            </div>
-            <div className="card-sub" style={{ marginTop: 8 }}>
-              Keys ship in the repo (<span className="mono">.env.production</span>) · env vars override ·
-              degraded providers fall back visibly, never crash.
-            </div>
-          </div>
         </div>
       </div>
 

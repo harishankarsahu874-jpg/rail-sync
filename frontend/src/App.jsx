@@ -92,7 +92,7 @@ function TopBar() {
           </span>
         </Link>
         <span className="topbar-spacer" />
-        <span className="chip chip-teal"><span className="dot" />5 APIs · LIVE</span>
+        <span className="chip chip-teal"><span className="dot" />LIVE</span>
       </div>
     </header>
   );
@@ -176,13 +176,30 @@ function Hero() {
           ))}
         </div>
         {runningNow.length > 0 && (
-          <div className="try-row" style={{ marginTop: 18 }}>
-            <span className="chip chip-live"><span className="dot" />OBSERVED RUNNING NOW</span>
-            {runningNow.map((row) => (
-              <button key={row.number} type="button" className="try-chip" onClick={() => go(row.number)}>
-                {row.number} · {row.name}
-              </button>
-            ))}
+          <div className="running-strip" style={{ marginTop: 18 }}>
+            <span className="chip chip-live"><span className="dot" />OBSERVED RUNNING NOW · exact live positions</span>
+            <div className="running-rows">
+              {runningNow.map((row) => (
+                <button key={row.number} type="button" className="running-row" onClick={() => go(row.number)}>
+                  <span className="mono rr-num">{row.number}</span>
+                  <span className="rr-name">{row.name}</span>
+                  {row.lat != null ? (
+                    <span className="rr-pos mono">
+                      {row.lat.toFixed(2)}, {row.lng.toFixed(2)} · {Math.round((row.progress || 0) * 100)}%
+                      {row.next_name ? ` · → ${row.next_name}` : ''}
+                    </span>
+                  ) : (
+                    <span className="rr-pos faint">position lands on open</span>
+                  )}
+                  {row.delay_min != null && (
+                    <span className={`rr-delay mono ${row.delay_min > 15 ? 'late' : ''}`}>
+                      {row.delay_min > 0 ? '+' : ''}{Math.round(row.delay_min)} min
+                    </span>
+                  )}
+                  <span className="rr-go">track →</span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </section>
