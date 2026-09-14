@@ -280,6 +280,66 @@ class PhotonGeocoder:
                 "display": f"{props.get('name', '')}, {props.get('state', '')}"}
 
 
+class OpenMeteoWeatherClient:
+    """Keyless weather fallback with the SAME shape as OpenWeather.
+
+    Demo-day insurance: if the OpenWeather key ever hits quota, the weather
+    panels and the RF severity input keep working off Open-Meteo.
+    """
+
+    name = "Open-Meteo Weather"
+
+    configured = True
+
+    _WMO = {
+        0: (800, "clear sky"), 1: (801, "mainly clear"), 2: (802, "partly cloudy"),
+        3: (804, "overcast"), 45: (450, "fog"), 48: (451, "depositing rime fog"),
+        51: (500, "light drizzle"), 53: (501, "drizzle"), 55: (502, "dense drizzle"),
+        56: (503, "freezing drizzle"), 57: (504, "dense freezing drizzle"),
+        61: (500, "slight rain"), 63: (501, "rain"), 65: (502, "heavy rain"),
+        66: (503, "freezing rain"), 67: (504, "heavy freezing rain"),
+        71: (600, "slight snow"), 73: (601, "snow"), 75: (602, "heavy snow"),
+        77: (611, "snow grains"), 80: (520, "rain showers"), 81: (521, "rain showers"),
+        82: (522, "violent rain showers"), 85: (620, "snow showers"),
+        86: (621, "heavy snow showers"), 95: (200, "thunderstorm"),
+        96: (231, "thunderstorm with hail"), 99: (232, "thunderstorm with heavy hail"),
+    }
+
+    def current(self, lat: float, lng: float) -> dict:
+        p = get_json(self.name, "https://api.open-meteo.com/v1/forecast",
+                     params={"latitude": round(lat, 5), "longitude": round(lng, 5),
+                             "current": "temperature_2m,relative_humidity_2m,apparent_"
+                                        "temperature,weather_code,wind_speed_10m,"
+                                        "precipitation,cloud_cover,visibility",
+                             "timezone": "auto"},
+                     timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        c = (p or {}).get("current") or {}
+        if not c or c.get("temperature_2m") is None:
+            raise ProviderRequestError(self.name, "empty Open-Meteo response")
+        wid, desc = self._WMO.get(int(c.get("weather_code") or 0), (800, "clear sky"))
+        rain = _num(c.get("precipitation"))
+        wind_ms = _num(c.get("wind_speed_10m")) / 3.6
+        visibility_m = _num(c.get("visibility"), 10_000)
+        clouds = _num(c.get("cloud_cover"))
+        return {
+            "provider": self.name,
+            "place": "Track section",
+            "condition": desc,
+            "condition_code": wid,
+            "temperature_c": round(_num(c.get("temperature_2m")), 1),
+            "feels_like_c": round(_num(c.get("apparent_temperature"),
+                                      _num(c.get("temperature_2m"))), 1),
+            "humidity_pct": round(_num(c.get("relative_humidity_2m"))),
+            "wind_kmh": round(_num(c.get("wind_speed_10m")), 1),
+            "rain_mm_h": round(rain, 1),
+            "cloud_pct": round(clouds),
+            "visibility_km": round(visibility_m / 1000, 1),
+            "severity": weather_severity(wid, rain, wind_ms, visibility_m, clouds),
+            "observed_at": c.get("time"),
+            "fetched_at": time.time(),
+        }
+
+
 class OpenMeteoGeocoder:
     """Keyless geocoder fallback when Nominatim throttles or misses a halt."""
 

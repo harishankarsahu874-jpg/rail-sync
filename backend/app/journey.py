@@ -135,7 +135,7 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
         "weather": weather,
         "elevation": {"cop30": cop30, "profile": profile},
         "model": ml.model_card(),
-        "enrich": "ready" if enr else "pending",
+        "enrich": "ready" if enr else ("static" if not running else "pending"),
         "route_geo": route_geo,
         "catalogue": {"in_catalogue": cat is not None,
                       "stops": len(halts),

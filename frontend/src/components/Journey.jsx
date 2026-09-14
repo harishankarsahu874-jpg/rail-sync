@@ -158,7 +158,9 @@ export default function Journey() {
               {train.position?.snapped
                 ? <span className="chip chip-teal">TRACK-SNAPPED · {train.position.offset_m} m</span>
                 : train.position
-                  ? <span className="chip chip-plain">RAW FIX · outside snap guard</span>
+                  ? <span className="chip chip-plain">
+                      {data.enrich === 'pending' ? 'FIX REFINING · snapping to track…' : 'RAW FIX · outside snap guard'}
+                    </span>
                   : null}
             </div>
             <h1 className="j-title" style={{ marginTop: 10 }}>{train.name}</h1>
@@ -352,7 +354,16 @@ export default function Journey() {
                 </div>
                 <div className="sev-bar"><div className="sev-fill" style={{ width: `${Math.round((data.weather.severity || 0) * 100)}%` }} /></div>
               </>
-            ) : <div className="card-sub">OpenWeather unavailable for this fix.</div>}
+            ) : data.enrich === 'pending' ? (
+              <div style={{ marginTop: 8 }}>
+                <div className="skel" style={{ height: 56 }} />
+                <div className="card-sub" style={{ marginTop: 8 }}>Fetching live weather at the fix…</div>
+              </div>
+            ) : !train.running ? (
+              <div className="card-sub">Service not running right now — weather & terrain appear once it departs.</div>
+            ) : (
+              <div className="card-sub">Weather providers unavailable for this fix.</div>
+            )}
 
             <div className="card-title" style={{ marginTop: 16 }}>Upcoming stops weather</div>
             {upcoming.filter((h) => h.weather).slice(0, 3).map((halt) => (
@@ -365,7 +376,11 @@ export default function Journey() {
               </div>
             ))}
             {upcoming.filter((h) => h.weather).length === 0 && (
-              <div className="card-sub">Geocoding upcoming halts…</div>
+              data.enrich === 'pending'
+                ? <div className="card-sub">Fetching weather at the next stops…</div>
+                : !train.running
+                  ? <div className="card-sub">Stop weather appears once the service departs.</div>
+                  : <div className="card-sub">No stop weather available for this fix.</div>
             )}
           </div>
 
@@ -379,7 +394,14 @@ export default function Journey() {
               {data.elevation?.cop30 && <> · COP30 at fix: <span className="mono">{data.elevation.cop30.elevation_m} m</span></>}
             </div>
             <div style={{ height: 130, marginTop: 10 }}>
-              <ResponsiveContainer>
+              {profile.length === 0 && data.enrich === 'pending'
+                ? <div className="skel" style={{ height: 130 }} />
+                : profile.length === 0 ? (
+                  <div className="card-sub" style={{ paddingTop: 40, textAlign: 'center' }}>
+                    {train.running ? 'Terrain profile unavailable for this fix.' : 'Terrain profile appears once the service departs.'}
+                  </div>
+                ) : (
+                  <ResponsiveContainer>
                 <AreaChart data={profile} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
                   <XAxis dataKey="km" hide />
                   <YAxis unit=" m" tick={{ fontSize: 10, fill: '#94a3b8' }} width={52} />
@@ -387,6 +409,7 @@ export default function Journey() {
                   <Area dataKey="m" stroke="#0d9488" fill="#ccfbf1" strokeWidth={2} connectNulls />
                 </AreaChart>
               </ResponsiveContainer>
+                )}
             </div>
           </div>
 

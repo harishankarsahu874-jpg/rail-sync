@@ -13,8 +13,9 @@ import time
 
 from .. import config
 from .clients import (NominatimClient, OpenMeteoElevationClient, OpenMeteoGeocoder,
-                      OpenTopographyClient, OpenWeatherClient, OverpassClient,
-                      PhotonGeocoder, RailRadarClient, WikimediaClient, haversine_m)
+                      OpenMeteoWeatherClient, OpenTopographyClient, OpenWeatherClient,
+                      OverpassClient, PhotonGeocoder, RailRadarClient, WikimediaClient,
+                      haversine_m)
 
 _HALT_SUFFIXES = (" JN", " JUNCTION", " CENTRAL", " CANTT", " CITY", " ROAD", " STATION")
 
@@ -38,6 +39,7 @@ class ProviderManager:
     def __init__(self):
         self.railradar = RailRadarClient()
         self.weather = OpenWeatherClient()
+        self.weather_fb = OpenMeteoWeatherClient()
         self.topography = OpenTopographyClient()
         self.overpass = OverpassClient()
         self.openmeteo = OpenMeteoElevationClient()
@@ -126,9 +128,10 @@ class ProviderManager:
             live = self._peek(f"live:{number}")
             if not isinstance(live, dict):
                 return
-            position = self.position_for(live)
+            # STAGE 1 (fast): raw fix + weather + stop weather + terrain.
+            # Passengers see weather/ETA/route within ~2 s of opening.
+            position = self.position_for(live, do_snap=False)
             weather = self.weather_at(position["lat"], position["lng"]) if position else None
-            cop30 = self.cop30_at(position["lat"], position["lng"]) if position else None
             geo: dict[str, dict] = {}
             for halt in halts:  # committed coords first; geocoders fill gaps
                 if halt.get("lat") is not None:
@@ -159,15 +162,23 @@ class ProviderManager:
                                "elevations": self.elevation_profile(points)}
             with self._lock:
                 self._enrich[number] = {"at": time.time(), "position": position,
-                                        "weather": weather, "cop30": cop30,
+                                        "weather": weather, "cop30": None,
                                         "geo": geo, "halt_wx": halt_wx, "profile": profile}
+            # STAGE 2 (slow): OSM track snap + COP30 cross-check upgrade the fix.
+            snapped = self.position_for(live, do_snap=True)
+            cop30 = self.cop30_at(snapped["lat"], snapped["lng"]) if snapped else None
+            with self._lock:
+                row = self._enrich.get(number)
+                if row:
+                    row.update({"at": time.time(), "position": snapped or position,
+                                "cop30": cop30})
         except Exception:  # noqa: BLE001 - enrichment must never kill the worker
             pass
         finally:
             with self._lock:
                 self._enriching.discard(number)
 
-    def position_for(self, live: dict) -> dict | None:
+    def position_for(self, live: dict, *, do_snap: bool = True) -> dict | None:
         """Live fix, honestly snapped to mapped OSM rail when inside the guard."""
         loc = live.get("currentLocation") or {}
         coords = loc.get("coordinates") or {}
@@ -181,7 +192,7 @@ class ProviderManager:
             return None
         if str(live.get("status") or "").lower() != "running":
             return None
-        snap = self.snap_to_rail(lat, lng)
+        snap = self.snap_to_rail(lat, lng) if do_snap else None
         inside = snap is not None
         return {
             "lat": round(snap["lat"], 6) if inside else lat,
@@ -258,17 +269,22 @@ class ProviderManager:
         return self._cached(f"live:{number}", 0 if force else config.JOURNEY_CACHE_SECONDS, load)
 
     def weather_at(self, lat: float, lng: float) -> dict | None:
-        if not self.weather.configured:
-            return None
         def load():
-            self._mark("openweather")
-            try:
-                value = self.weather.current(lat, lng)
+            if self.weather.configured:
+                self._mark("openweather")
+                try:
+                    value = self.weather.current(lat, lng)
+                    self._mark("openweather", ok=True)
+                    return value
+                except Exception as exc:
+                    self._mark("openweather", ok=False, error=str(exc))
+            try:  # keyless insurance: same shape, zero keys
+                value = self.weather_fb.current(lat, lng)
+                self._mark("openmeteo", ok=True)
+                return value
             except Exception as exc:
-                self._mark("openweather", ok=False, error=str(exc))
+                self._mark("openmeteo", ok=False, error=str(exc))
                 return None
-            self._mark("openweather", ok=True)
-            return value
         return self._cached(f"wx:{round(lat, 2)}:{round(lng, 2)}", config.WEATHER_CACHE_SECONDS, load)
 
     def cop30_at(self, lat: float, lng: float) -> dict | None:
