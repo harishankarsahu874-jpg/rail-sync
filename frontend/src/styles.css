@@ -393,3 +393,10 @@ body {
   background: var(--teal); color: #fff; border: 0; border-radius: 10px;
   padding: 8px 12px; font: 800 12px var(--sans); cursor: pointer; white-space: nowrap;
 }
+
+.j-strip {
+  display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px;
+  background: var(--teal-soft); border: 1px solid rgba(13, 148, 136, .25);
+  border-radius: 12px; padding: 9px 13px; font-size: 12px; color: var(--ink-2);
+}
+.j-strip b { color: var(--teal-ink); }

@@ -11,6 +11,9 @@ const storedType = () => {
   }
 };
 
+// Keyless glyph server so station-code labels render on raster basemaps.
+const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+
 /**
  * Live route map, RailRadar-style but realistic: satellite imagery by default
  * (passenger-switchable Satellite / Streets / Dark), the full scheduled route
@@ -33,9 +36,11 @@ export default function MapView({ position, running, routeGeo = [], track = null
     const first = (routeGeo || [])[0];
     const center = position ? [position.lng, position.lat] : first ? [first.lng, first.lat] : [79.8, 23.4];
     const type = MAP_TYPES.find((t) => t.id === storedType()) || MAP_TYPES[0];
+    const initialStyle = type.build();
+    initialStyle.glyphs = GLYPHS;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: type.build(),
+      style: initialStyle,
       center,
       zoom: position || routeGeo.length ? 5.2 : 4.4,
       minZoom: 3,
@@ -52,9 +57,9 @@ export default function MapView({ position, running, routeGeo = [], track = null
       const now = Date.now();
       if (now - windowStart > 30_000) { windowStart = now; tileErrors = 0; }
       tileErrors += 1;
-      if (tileErrors >= 10 && storedType() !== 'dark') {
-        setNote('Basemap unreachable — switched to the free dark raster');
-        applyType('dark', true);
+      if (tileErrors >= 10 && storedType() !== 'sat') {
+        setNote('Basemap unreachable from this network — satellite view restored');
+        applyType('sat', true);
       }
     });
 
@@ -94,10 +99,27 @@ export default function MapView({ position, running, routeGeo = [], track = null
       map.addLayer({
         id: 'rs-stops-dot', type: 'circle', source: 'rs-stops',
         paint: {
-          'circle-radius': ['case', ['get', 'next'], 5, 3.4],
+          'circle-radius': ['case', ['get', 'end'], 6, ['get', 'next'], 5, 3.4],
           'circle-color': ['case', ['get', 'passed'], '#cbd5e1', ['get', 'next'], '#f59e0b', '#0d9488'],
           'circle-stroke-width': 1.4,
           'circle-stroke-color': '#0b0f14',
+        },
+      });
+      map.addLayer({
+        id: 'rs-stops-label', type: 'symbol', source: 'rs-stops',
+        layout: {
+          'text-field': ['get', 'code'],
+          'text-font': ['Noto Sans Regular'],
+          'text-size': ['case', ['get', 'end'], 12, 10],
+          'text-offset': [0, -1.15],
+          'text-anchor': 'center',
+          'text-allow-overlap': false,
+          'text-optional': true,
+        },
+        paint: {
+          'text-color': '#f8fafc',
+          'text-halo-color': 'rgba(2,6,12,0.92)',
+          'text-halo-width': 1.5,
         },
       });
       map.on('click', 'rs-stops-dot', (e) => {
@@ -124,6 +146,8 @@ export default function MapView({ position, running, routeGeo = [], track = null
       const runningNow = cur.running;
       const trackNow = cur.track;
       const pts = (cur.routeGeo || []).filter((p) => p.lat != null && p.lng != null);
+      const firstCode = pts[0]?.code;
+      const lastCode = pts[pts.length - 1]?.code;
       const trainAt = runningNow && posNow ? [posNow.lng, posNow.lat] : null;
       const passedPts = pts.filter((p) => p.passed).map((p) => [p.lng, p.lat]);
       const aheadPts = pts.filter((p) => !p.passed).map((p) => [p.lng, p.lat]);
@@ -141,7 +165,8 @@ export default function MapView({ position, running, routeGeo = [], track = null
           type: 'Feature',
           properties: {
             name: p.name, code: p.code || '', sched: p.sched || '', passed: Boolean(p.passed),
-            next: Boolean(p.next), eta: p.eta_label || '', href: p.href || '',
+            next: Boolean(p.next), end: p.code === firstCode || p.code === lastCode,
+            eta: p.eta_label || '', href: p.href || '',
           },
           geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
         })),
@@ -156,16 +181,27 @@ export default function MapView({ position, running, routeGeo = [], track = null
         const bounds = pts.reduce((b, p) => b.extend([p.lng, p.lat]),
           new maplibregl.LngLatBounds([pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]));
         if (trainAt) bounds.extend(trainAt);
-        map.fitBounds(bounds, { padding: 60, maxZoom: 9.5 });
+        map.fitBounds(bounds, { padding: 60, maxZoom: 6.5 });
       }
     };
     map._rsPaint = paint;
+    map._rsFit = () => {
+      const cur = propsRef.current;
+      const pts = (cur.routeGeo || []).filter((p) => p.lat != null && p.lng != null);
+      if (pts.length < 2) return;
+      const bounds = pts.reduce((b, p) => b.extend([p.lng, p.lat]),
+        new maplibregl.LngLatBounds([pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]));
+      if (cur.running && cur.position) bounds.extend([cur.position.lng, cur.position.lat]);
+      map.fitBounds(bounds, { padding: 60, maxZoom: 9.5 });
+    };
 
     const applyType = (id, silent = false) => {
       const next = MAP_TYPES.find((t) => t.id === id) || MAP_TYPES[0];
       try { localStorage.setItem('rs_maptype', next.id); } catch { /* ignore */ }
       setMapType(next.id);
-      map.setStyle(next.build());
+      const st = next.build();
+      st.glyphs = GLYPHS;
+      map.setStyle(st);
       map.once('style.load', () => { addLayers(); paint(); });
       if (!silent) setNote('');
     };
@@ -195,6 +231,10 @@ export default function MapView({ position, running, routeGeo = [], track = null
             {t.label}
           </button>
         ))}
+        <button type="button" className="map-type" title="Zoom to the full route"
+          onClick={() => mapRef.current?._rsFit?.()}>
+          ⤢ Full route
+        </button>
       </div>
       {note && <div className="map-note">{note}</div>}
       <div className="map-legend">
