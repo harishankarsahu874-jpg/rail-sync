@@ -48,14 +48,14 @@ export default function Journey() {
   // background thread; we poll fast until they land, then settle to 30 s.
   useEffect(() => {
     let livePhoto = true;
-    const num = train?.number;
+    const num = data?.train?.number;
     if (num) {
       fetchTrainPhotos([num]).then((m) => {
         if (livePhoto && m[num] && m[num].url) setPhoto(m[num]);
       }).catch(() => {});
     }
     return () => { livePhoto = false; };
-  }, [train?.number]);
+  }, [data?.train?.number]);
 
   useEffect(() => {
     let alive = true;

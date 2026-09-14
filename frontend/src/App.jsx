@@ -205,6 +205,33 @@ function StaleBundleGuard() {
   );
 }
 
+/** Never show a fully blank page: catch render crashes with a friendly card. */
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err) { return { err }; }
+  render() {
+    if (this.state.err) {
+      return (
+        <div className="wrap" style={{ padding: 60, textAlign: 'center' }}>
+          <div className="panel panel-pad" style={{ maxWidth: 520, margin: '0 auto' }}>
+            <div style={{ fontSize: 34 }}>🚧</div>
+            <h2 style={{ margin: '8px 0 6px' }}>Something derailed on this view</h2>
+            <div className="card-sub">
+              The page hit an unexpected error ({String(this.state.err && this.state.err.message || this.state.err)}).
+              Your session is safe — reload to continue tracking.
+            </div>
+            <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button type="button" className="try-chip" onClick={() => window.location.reload()}>Reload RailSync</button>
+              <button type="button" className="try-chip" onClick={() => this.setState({ err: null })}>Try again</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function readSession() {
   try {
     const raw = localStorage.getItem('railsync_session') || sessionStorage.getItem('railsync_session');
@@ -242,11 +269,13 @@ export default function App() {
     <>
       <StaleBundleGuard />
       <TopBar session={session} onSignOut={signOut} />
-      <Routes>
-        <Route path="/" element={<Hero />} />
-        <Route path="/train/:number" element={<Journey />} />
-        <Route path="/train/:number/station/:code" element={<Station />} />
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/" element={<Hero />} />
+          <Route path="/train/:number" element={<Journey />} />
+          <Route path="/train/:number/station/:code" element={<Station />} />
+        </Routes>
+      </ErrorBoundary>
       <Saathi />
     </>
   );

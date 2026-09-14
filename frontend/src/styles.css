@@ -538,3 +538,22 @@ body {
 
 /* ============ V9 · real-photo credit on journey hero ============ */
 .j-hero-credit { position: absolute; right: 12px; bottom: 10px; background: rgba(6, 12, 28, .55); color: rgba(255, 255, 255, .85); border-radius: 999px; padding: 4px 10px; font: 600 9.5px var(--sans); backdrop-filter: blur(4px); }
+
+/* ============ V10 · compact real-website login card ============ */
+.lg-main { padding: 22px 26px; gap: 22px; }
+.lg-left { min-height: 470px; }
+.lg-right { justify-content: center; }
+.lg-card { max-width: 432px; margin: 0 auto; padding: 22px 22px 16px; gap: 10px; border-radius: 16px; }
+.lg-card h2 { font-size: 19px; }
+.lg-sub { font-size: 11.5px; }
+.lg-tabs button { padding: 8px 6px; font-size: 11.5px; }
+.login-field { padding: 9px 12px; border-radius: 10px; }
+.login-field input { font-size: 12.5px; }
+.login-label { font-size: 11px; }
+.lg-submit { padding: 11px; font-size: 13px; border-radius: 10px; }
+.lg-google { padding: 9px; font-size: 12.5px; border-radius: 10px; }
+.lg-feats { gap: 8px; padding: 4px 18px 12px; }
+.lg-left-copy { padding: 20px 22px 10px; }
+.lg-left-copy h1 { font-size: 29px; }
+.lg-banner { margin: 0 18px 18px; padding: 10px 12px; }
+@media (max-width: 980px) { .lg-card { max-width: 100%; } }
