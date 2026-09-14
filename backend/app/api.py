@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from . import catalog, config, journey
+from . import catalog, config, journey, trains_media
 from .providers.manager import ProviderManager
 
 router = APIRouter(prefix="/api")
@@ -44,6 +44,18 @@ def health():
             "providers_configured": sum(1 for row in _manager.public_status()["items"].values()
                                          if row["configured"]),
             "catalogue": catalog.stats()}
+
+
+@router.get("/train_photos")
+def train_photos(nums: str = Query("", max_length=120)):
+    """Real per-train photography (Wikipedia infobox → Wikimedia Commons),
+    cached server-side. Frontend swaps class artwork for these when present."""
+    out: dict = {}
+    for n in [x.strip() for x in nums.split(",") if x.strip()][:8]:
+        cat = catalog.get(n) or {}
+        row = trains_media.photo_for(n, cat.get("name") or f"Train {n}")
+        out[n] = {"url": row.get("url"), "source": row.get("source")}
+    return {"photos": out}
 
 
 @router.get("/stations")

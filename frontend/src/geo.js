@@ -20,14 +20,29 @@ export function baseStyle() {
         'Places labels © Esri'),
       esriTransport: raster([`${E}/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}`],
         'Transport overlay © Esri'),
-      esriStreets: raster([`${E}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`],
-        '© Esri World Street Map contributors'),
+      /* OSM-derived streets via the committed Geoapify key: full India
+         coverage at every zoom (Esri World Street Map serves gray
+         "Map data not yet available" placeholders beyond z12-17 here). */
+      geoapifyStreets: GEOAPIFY_KEY
+        ? {
+          type: 'raster', tileSize: 256, maxzoom: 20,
+          tiles: [`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_KEY}`],
+          attribution: '© OpenStreetMap contributors, Geoapify',
+        }
+        : raster([`${E}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`],
+          '© Esri World Street Map contributors'),
+      esriStreetsClassic: {
+        ...raster([`${E}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`],
+          '© Esri World Street Map contributors'),
+        maxzoom: 13,
+      },
     },
     layers: [
       { id: 'rs-base-sat', type: 'raster', source: 'esriSat' },
       { id: 'rs-base-sat-transport', type: 'raster', source: 'esriTransport', paint: { 'raster-opacity': 0.5 } },
       { id: 'rs-base-sat-places', type: 'raster', source: 'esriPlaces' },
-      { id: 'rs-base-streets', type: 'raster', source: 'esriStreets', layout: { visibility: 'none' } },
+      { id: 'rs-base-streets', type: 'raster', source: 'geoapifyStreets', layout: { visibility: 'none' } },
+      { id: 'rs-base-streets-classic', type: 'raster', source: 'esriStreetsClassic', layout: { visibility: 'none' } },
     ],
   };
 }

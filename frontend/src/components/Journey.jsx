@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api.js';
 import { reverseGeocode } from '../geo.js';
-import { trainArt } from '../trainArt.js';
+import { trainArt, fetchTrainPhotos } from '../trainArt.js';
 
 // The map is a separate chunk: the dashboard paints instantly and pulls the
 // basemap library in behind it.
@@ -39,12 +39,24 @@ export default function Journey() {
   const [error, setError] = useState('');
   const [place, setPlace] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [photo, setPhoto] = useState(null);
   const [boardOpen, setBoardOpen] = useState(true);
   const [reload, setReload] = useState(0);
 
   // Progressive loading: first paint needs only RailRadar + catalogue + RF.
   // Slow providers (snap, weather, geocode, elevation) enrich server-side in a
   // background thread; we poll fast until they land, then settle to 30 s.
+  useEffect(() => {
+    let livePhoto = true;
+    const num = train?.number;
+    if (num) {
+      fetchTrainPhotos([num]).then((m) => {
+        if (livePhoto && m[num] && m[num].url) setPhoto(m[num]);
+      }).catch(() => {});
+    }
+    return () => { livePhoto = false; };
+  }, [train?.number]);
+
   useEffect(() => {
     let alive = true;
     let timer = null;
@@ -149,7 +161,7 @@ export default function Journey() {
     <div className="wrap">
       {/* ---------------------------------------------------------- header */}
       <div className="j-hero">
-        <img className="j-hero-img" src={trainArt(train)} alt="" />
+        <img className="j-hero-img" src={photo?.url || trainArt(train)} alt="" />
         <div className="j-hero-scrim" />
         <div className="j-hero-top">
           <span className="mono chip chip-plain jh-chip">#{train.number}</span>
@@ -180,6 +192,7 @@ export default function Journey() {
           {train.route_ends && train.route_ends.length === 2 && (
             <div className="j-hero-ends mono">{train.route_ends[0]} → {train.route_ends[1]}</div>
           )}
+          {photo && <span className="j-hero-credit">📷 {photo.source === 'wikipedia' ? 'Wikipedia' : 'Wikimedia Commons'}</span>}
         </div>
       </div>
 

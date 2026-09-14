@@ -52,11 +52,22 @@ export default function MapView({ position, running, routeGeo = [], track = null
 
     let tileErrors = 0;
     let windowStart = 0;
+    const classicRef = { on: false };
     map.on('error', () => {
       const now = Date.now();
       if (now - windowStart > 30_000) { windowStart = now; tileErrors = 0; }
       tileErrors += 1;
-      if (tileErrors >= 10 && storedType() !== 'sat') {
+      if (tileErrors < 8) return;
+      tileErrors = 0;
+      const cur = storedType();
+      if (cur === 'streets' && !classicRef.on) {
+        /* street tiles failing (quota/network): drop to the classic Esri
+           street raster before giving up on streets altogether */
+        classicRef.on = true;
+        if (map.getLayer('rs-base-streets')) map.setLayoutProperty('rs-base-streets', 'visibility', 'none');
+        if (map.getLayer('rs-base-streets-classic')) map.setLayoutProperty('rs-base-streets-classic', 'visibility', 'visible');
+        setNote('Street tiles limited on this network — classic street view shown');
+      } else if (cur !== 'sat') {
         setNote('Basemap unreachable from this network — satellite view restored');
         applyType('sat', true);
       }
@@ -204,6 +215,10 @@ export default function MapView({ position, running, routeGeo = [], track = null
       ALL_BASE_LAYERS.forEach((lid) => {
         if (map.getLayer(lid)) map.setLayoutProperty(lid, 'visibility', on.has(lid) ? 'visible' : 'none');
       });
+      if (next.id === 'streets' && classicRef.on
+          && map.getLayer('rs-base-streets-classic')) {
+        map.setLayoutProperty('rs-base-streets-classic', 'visibility', 'visible');
+      }
       if (!silent) setNote('');
     };
     map._rsApplyType = applyType;

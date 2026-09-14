@@ -535,3 +535,6 @@ body {
 .st-thumb { width: 52px; height: 34px; object-fit: cover; border-radius: 8px; flex: none; box-shadow: 0 1px 4px rgba(15, 30, 60, .25); }
 .lg-terms { font-size: 11.5px; color: var(--muted); align-items: flex-start; }
 @media (max-width: 640px) { .j-hero { min-height: 190px; } .j-hero-copy .j-title { font-size: 20px; } .user-meta { display: none; } }
+
+/* ============ V9 · real-photo credit on journey hero ============ */
+.j-hero-credit { position: absolute; right: 12px; bottom: 10px; background: rgba(6, 12, 28, .55); color: rgba(255, 255, 255, .85); border-radius: 999px; padding: 4px 10px; font: 600 9.5px var(--sans); backdrop-filter: blur(4px); }

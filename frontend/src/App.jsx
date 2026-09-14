@@ -6,7 +6,7 @@ import Login from './components/Login.jsx';
 import RailwayArt from './components/RailwayArt.jsx';
 import Station from './components/Station.jsx';
 import Saathi from './components/Saathi.jsx';
-import { trainArt } from './trainArt.js';
+import { trainArt, fetchTrainPhotos } from './trainArt.js';
 
 const TRAIN_ICON = (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -56,6 +56,7 @@ function Hero() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
+  const [resPhotos, setResPhotos] = useState({});
   const [runningNow, setRunningNow] = useState([]);
 
   useEffect(() => {
@@ -70,7 +71,11 @@ function Hero() {
     if (query.trim().length < 2) { setResults([]); return undefined; }
     const handle = setTimeout(() => {
       api.get(`/api/search?q=${encodeURIComponent(query)}`)
-        .then((data) => setResults(data.results || []))
+        .then((data) => {
+          const rows = data.results || [];
+          setResults(rows);
+          fetchTrainPhotos(rows.map((r) => r.number)).then((m) => setResPhotos((prev) => ({ ...prev, ...m }))).catch(() => {});
+        })
         .catch(() => setResults([]));
     }, 250);
     return () => clearTimeout(handle);
@@ -105,7 +110,7 @@ function Hero() {
           <div className="search-results">
             {results.map((row) => (
               <button key={row.number} type="button" onClick={() => go(row.number)}>
-                <img className="res-thumb" src={trainArt(row)} alt="" />
+                <img className="res-thumb" src={resPhotos[row.number]?.url || trainArt(row)} alt="" />
                 <span className="mono" style={{ color: 'var(--teal-ink)', fontWeight: 600 }}>{row.number}</span>
                 <span>{row.name}</span>
                 <span className="faint" style={{ marginLeft: 'auto', fontSize: 11 }}>
