@@ -1,16 +1,27 @@
 import React, { useState } from 'react';
-import RailwayArt from './RailwayArt.jsx';
+
+const FEATS = [
+  ['📍', 'Live Location', 'Track trains in real time'],
+  ['📈', 'Dynamic ETA', 'Random-Forest predictions'],
+  ['🔔', 'Live Alerts', 'Delays & disruptions'],
+  ['🤝', 'Better Journey', 'Reliable · Accurate · Live'],
+];
 
 /**
- * Minimalist passenger gate (demo auth, client-side only):
- * any Travel ID + 4-char key signs in, or "Continue as Guest" skips ahead.
- * Nothing is ever sent to a server; "remember" picks local vs session storage.
+ * IRCTC-grade split hero gate (demo auth, client-side only).
+ * Left: photographic railway hero + feature strip + zone banner.
+ * Right: welcome card with User / Partner tabs, Google demo button,
+ * and an always-available guest path. Nothing leaves the browser.
  */
 export default function Login({ onDone }) {
+  const [tab, setTab] = useState('user');
   const [id, setId] = useState('');
   const [key, setKey] = useState('');
+  const [showKey, setShowKey] = useState(false);
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+  const [q, setQ] = useState('');
 
   const finish = (session) => {
     const store = remember ? localStorage : sessionStorage;
@@ -20,67 +31,147 @@ export default function Login({ onDone }) {
 
   const submit = (e) => {
     e.preventDefault();
-    if (!id.trim()) { setError('Enter your username or Travel ID — demo, anything works.'); return; }
-    if (key.trim().length < 4) { setError('Security key needs 4+ characters — demo, anything works.'); return; }
+    if (tab === 'org') { finish({ name: id.trim() || 'Partner', mode: 'partner' }); return; }
+    if (!id.trim()) { setError('Enter your email, mobile number or Travel ID — demo, anything works.'); return; }
+    if (key.trim().length < 4) { setError('Password needs 4+ characters — demo, anything works.'); return; }
     setError('');
-    finish({ name: id.trim(), mode: 'passenger' });
+    finish({ name: id.trim().split('@')[0], mode: 'passenger' });
+  };
+
+  const search = (e) => {
+    e.preventDefault();
+    if (!q.trim()) return;
+    finish({ name: 'Guest', mode: 'guest', goto: `/train/${encodeURIComponent(q.trim())}` });
   };
 
   return (
-    <div className="login-wrap">
-      <div className="login-bg" aria-hidden="true">
-        <RailwayArt />
-        <div className="login-bg-fade" />
-      </div>
-
-      <div className="login-card-wrap">
-        <div className="login-brand">
+    <div className="lg-page">
+      <header className="lg-nav">
+        <span className="lg-brand">
           <span className="brand-logo">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <rect x="5" y="3" width="14" height="13" rx="3" /><path d="M5 10h14" /><path d="M9 20l-1.5 2M15 20l1.5 2" />
               <circle cx="9" cy="13.5" r=".8" /><circle cx="15" cy="13.5" r=".8" />
             </svg>
           </span>
-          <span className="login-title">Rail<em>Sync</em> · Passenger Login</span>
-        </div>
-
-        <h1 className="login-h1">Board Your Next Journey</h1>
-        <p className="login-sub">
-          Live positions, full station boards and Random-Forest ETAs
-          across every catalogued train in India.
-        </p>
-
-        <form className="panel panel-pad login-card" onSubmit={submit}>
-          <label className="login-label" htmlFor="ls-id">Username or Travel ID</label>
-          <div className="login-field">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2" /><circle cx="9" cy="11" r="2" /><path d="M6.5 16c.6-1.6 4.4-1.6 5 0M14 9h5M14 13h5" /></svg>
-            <input id="ls-id" value={id} onChange={(e) => setId(e.target.value)} placeholder="e.g. hari.traveller or IR-892401" autoComplete="username" />
-          </div>
-
-          <label className="login-label" htmlFor="ls-key">Security Key</label>
-          <div className="login-field">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
-            <input id="ls-key" type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="••••••••" autoComplete="current-password" />
-          </div>
-
-          <label className="login-remember">
-            <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-            Remember this device
-          </label>
-
-          {error && <div className="login-error">{error}</div>}
-
-          <button type="submit" className="login-submit">Sign In & Plan Journey <span aria-hidden="true">→</span></button>
-          <button type="button" className="login-guest-btn" onClick={() => finish({ name: 'Guest', mode: 'guest' })}>
-            Continue as Guest →
-          </button>
+          <span>
+            <b>Rail<em>Sync</em></b>
+            <i>India Moves Together</i>
+          </span>
+        </span>
+        <nav className="lg-links">
+          {['Home', 'Live Trains', 'Train Schedule', 'Stations'].map((l) => (
+            <button key={l} type="button" className="lg-link" onClick={() => setNote(`Sign in (or continue as guest) to open ${l} 🙂`)}>{l}</button>
+          ))}
+          <span className="lg-link more">More ⌄</span>
+        </nav>
+        <form className="lg-search" onSubmit={search}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Train No. / Name / Station" aria-label="Search train" />
         </form>
+        <span className="lg-lang">🌐 English ⌄</span>
+      </header>
 
-        <div className="login-privacy mono">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" /></svg>
-          Demo sign-in · nothing leaves this browser
-        </div>
-      </div>
+      <main className="lg-main">
+        <section className="lg-left">
+          <img src="/login-hero.jpg" alt="Indian Railways express train at golden hour" className="lg-hero-img" />
+          <div className="lg-left-scrim" />
+          <div className="lg-left-copy">
+            <h1>Track Every Train<br /><em>Across India</em></h1>
+            <p>Live train locations, real-time RF ETA predictions and smarter travel information — all in one place.</p>
+          </div>
+          <div className="lg-feats">
+            {FEATS.map(([icon, title, sub]) => (
+              <div key={title} className="lg-feat">
+                <span aria-hidden="true">{icon}</span>
+                <b>{title}</b>
+                <i>{sub}</i>
+              </div>
+            ))}
+          </div>
+          <div className="lg-banner">
+            <span aria-hidden="true">🚆</span>
+            <div>
+              <b>Real-time train movement now across all Indian Railways zones</b>
+              <i>Powered by live telemetry + our AI-based Random-Forest ETA engine · 5,139 catalogued services</i>
+            </div>
+            <button type="button" onClick={() => finish({ name: 'Guest', mode: 'guest' })}>Know More →</button>
+          </div>
+        </section>
+
+        <aside className="lg-right">
+          <form className="lg-card" onSubmit={submit}>
+            <h2>Welcome to <em>RailSync</em></h2>
+            <p className="lg-sub">Sign in to access live train tracking, ETA predictions and more.</p>
+
+            <div className="lg-tabs" role="tablist">
+              <button type="button" role="tab" aria-selected={tab === 'user'} className={tab === 'user' ? 'on' : ''} onClick={() => { setTab('user'); setError(''); }}>User Login</button>
+              <button type="button" role="tab" aria-selected={tab === 'org'} className={tab === 'org' ? 'on' : ''} onClick={() => { setTab('org'); setError(''); }}>Organization / Partner</button>
+            </div>
+
+            <label className="login-label" htmlFor="lg-id">
+              {tab === 'user' ? 'Email / Mobile Number / Travel ID' : 'Organization ID'}
+            </label>
+            <div className="login-field">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4" /><path d="M4 20c1.5-4 14.5-4 16 0" /></svg>
+              <input id="lg-id" value={id} onChange={(e) => setId(e.target.value)} placeholder={tab === 'user' ? 'Enter your email, mobile number or user ID' : 'e.g. PARTNER-0042'} autoComplete="username" />
+            </div>
+
+            {tab === 'user' && (
+              <>
+                <div className="login-label-row">
+                  <label className="login-label" htmlFor="lg-key">Password</label>
+                  <button type="button" className="login-mini" onClick={() => setShowKey((v) => !v)}>{showKey ? 'Hide' : 'Show'}</button>
+                </div>
+                <div className="login-field">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="10" width="16" height="10" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+                  <input id="lg-key" type={showKey ? 'text' : 'password'} value={key} onChange={(e) => setKey(e.target.value)} placeholder="Enter your password" autoComplete="current-password" />
+                </div>
+                <div className="lg-rem-row">
+                  <label className="login-remember">
+                    <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                    Remember me
+                  </label>
+                  <button type="button" className="login-mini" onClick={() => setNote('Demo build — any password works, no reset needed 🙂')}>Forgot Password?</button>
+                </div>
+              </>
+            )}
+            {tab === 'org' && (
+              <div className="card-sub" style={{ marginTop: 4 }}>
+                Partner access is invite-only during the hackathon demo — sign in with your org ID or continue as guest.
+              </div>
+            )}
+
+            {error && <div className="login-error">{error}</div>}
+            {note && <div className="login-note">{note}</div>}
+
+            <button type="submit" className="lg-submit">{tab === 'user' ? 'Sign In' : 'Continue as Partner'}</button>
+
+            {tab === 'user' && (
+              <>
+                <div className="login-divider"><span>OR</span></div>
+                <button type="button" className="lg-google" onClick={() => finish({ name: 'Google Traveller', mode: 'google' })}>
+                  <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7c2.2-2 3.4-5 3.4-8.6z" /><path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3A11.5 11.5 0 0 0 12 24z" /><path fill="#FBBC05" d="M5.6 14.7a6.9 6.9 0 0 1 0-4.4v-3H1.8a11.5 11.5 0 0 0 0 10.4l3.8-3z" /><path fill="#EA4335" d="M12 4.6c1.7 0 3.2.6 4.4 1.7l3.3-3.3A11.5 11.5 0 0 0 1.8 7.3l3.8 3c.9-2.7 3.4-4.7 6.4-4.7z" /></svg>
+                  Continue with Google <span className="faint" style={{ fontSize: 10 }}>(demo)</span>
+                </button>
+                <div className="lg-signup">
+                  Don&apos;t have an account?{' '}
+                  <button type="button" className="login-mini" onClick={() => finish({ name: 'New Passenger', mode: 'guest' })}>Sign Up</button>
+                </div>
+              </>
+            )}
+            <button type="button" className="login-guest-btn" onClick={() => finish({ name: 'Guest', mode: 'guest' })}>
+              Exploring? Continue as Guest →
+            </button>
+          </form>
+        </aside>
+      </main>
+
+      <footer className="lg-foot">
+        <span className="lg-foot-brand">🚂 Rail<em>Sync</em> · Safety | Security | Punctuality</span>
+        <span className="lg-foot-links">About · Contact Us · Terms of Use · Privacy Policy · Help & Support</span>
+        <span className="mono lg-foot-demo">demo build · no real credentials stored</span>
+      </footer>
     </div>
   );
 }

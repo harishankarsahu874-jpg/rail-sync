@@ -46,6 +46,12 @@ def health():
             "catalogue": catalog.stats()}
 
 
+@router.get("/stations")
+def stations(q: str = Query("", min_length=1, max_length=60)):
+    """Station-name search over the uploaded timetable (powers RailSync Saathi)."""
+    return {"query": q, "results": catalog.station_search(q)}
+
+
 @router.get("/station/{code}")
 def station(code: str, name: str = Query("", max_length=80), train: str = Query("", max_length=8)):
     """Station dossier: photo, encyclopedia summary, every catalogued service

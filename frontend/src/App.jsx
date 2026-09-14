@@ -5,6 +5,7 @@ import Journey from './components/Journey.jsx';
 import Login from './components/Login.jsx';
 import RailwayArt from './components/RailwayArt.jsx';
 import Station from './components/Station.jsx';
+import Saathi from './components/Saathi.jsx';
 
 const TRAIN_ICON = (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -203,6 +204,14 @@ function readSession() {
 
 export default function App() {
   const [session, setSession] = useState(readSession);
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (session && session.goto) {
+      const to = session.goto;
+      setSession({ ...session, goto: undefined });
+      navigate(to);
+    }
+  }, [session, navigate]);
   const signOut = () => {
     try {
       localStorage.removeItem('railsync_session');
@@ -226,6 +235,7 @@ export default function App() {
         <Route path="/train/:number" element={<Journey />} />
         <Route path="/train/:number/station/:code" element={<Station />} />
       </Routes>
+      <Saathi />
     </>
   );
 }

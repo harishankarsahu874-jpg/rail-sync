@@ -126,6 +126,29 @@ def count_at(code: str) -> int:
     return len(trains_at(code, limit=10 ** 9))
 
 
+def station_search(query: str, limit: int = 6) -> list[dict]:
+    """Fuzzy station-name lookup over the all-India halt index (for Saathi)."""
+    needle = query.strip().upper()
+    if not needle:
+        return []
+    seen: dict[str, dict] = {}
+    for train in _load().values():
+        for stop in train["halt_stops"]:
+            code = stop["code"]
+            if code in seen:
+                continue
+            if needle in stop["name"] or needle == code:
+                seen[code] = {"code": code, "name": stop["name"], "services": 0}
+            if len(seen) >= limit * 4:
+                break
+        if len(seen) >= limit * 4:
+            break
+    rows = sorted(seen.values(), key=lambda r: r["name"])
+    for row in rows:
+        row["services"] = count_at(row["code"])
+    return rows[:limit]
+
+
 def stats() -> dict:
     trains = _load()
     return {"trains": len(trains), "stops": sum(len(t["stops"]) for t in trains.values())}
