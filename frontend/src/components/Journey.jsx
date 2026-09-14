@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api } from '../api.js';
 import { reverseGeocode } from '../geo.js';
+import { trainArt } from '../trainArt.js';
 
 // The map is a separate chunk: the dashboard paints instantly and pulls the
 // basemap library in behind it.
@@ -147,37 +148,42 @@ export default function Journey() {
   return (
     <div className="wrap">
       {/* ---------------------------------------------------------- header */}
-      <div className="panel panel-pad">
-        <div className="j-head">
-          <div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="mono chip chip-plain">#{train.number}</span>
-              {train.running
-                ? <span className="chip chip-live"><span className="dot" />LIVE · {train.status.toUpperCase()}</span>
-                : <span className="chip chip-off">NOT RUNNING · {train.status.toUpperCase()}</span>}
-              {train.position?.snapped
-                ? <span className="chip chip-teal">TRACK-SNAPPED · {train.position.offset_m} m</span>
-                : train.position
-                  ? <span className="chip chip-plain">
-                      {data.enrich === 'pending' ? 'FIX REFINING · snapping to track…' : 'RAW FIX · outside snap guard'}
-                    </span>
-                  : null}
-            </div>
-            <h1 className="j-title" style={{ marginTop: 10 }}>{train.name}</h1>
-            <div className="j-sub">
-              {train.running
-                ? `Live fix ${train.age_s ?? '?'} s old · auto-updates every ${POLL_READY_MS / 1000} s`
-                : 'This service is not running right now — route shown for reference'}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="button" className="try-chip" onClick={refresh} disabled={refreshing}>
+      <div className="j-hero">
+        <img className="j-hero-img" src={trainArt(train)} alt="" />
+        <div className="j-hero-scrim" />
+        <div className="j-hero-top">
+          <span className="mono chip chip-plain jh-chip">#{train.number}</span>
+          {train.running
+            ? <span className="chip chip-live jh-chip"><span className="dot" />LIVE · {train.status.toUpperCase()}</span>
+            : <span className="chip chip-off jh-chip">NOT RUNNING · {train.status.toUpperCase()}</span>}
+          {train.position?.snapped
+            ? <span className="chip chip-teal jh-chip">TRACK-SNAPPED · {train.position.offset_m} m</span>
+            : train.position
+              ? <span className="chip chip-plain jh-chip">
+                  {data.enrich === 'pending' ? 'FIX REFINING · snapping to track…' : 'RAW FIX · outside snap guard'}
+                </span>
+              : null}
+          <span className="j-hero-actions">
+            <button type="button" className="try-chip jh-btn" onClick={refresh} disabled={refreshing}>
               {refreshing ? 'Refreshing…' : 'Force refresh'}
             </button>
-            <Link to="/" className="try-chip" style={{ textDecoration: 'none' }}>New search</Link>
-          </div>
+            <Link to="/" className="try-chip jh-btn" style={{ textDecoration: 'none' }}>New search</Link>
+          </span>
         </div>
+        <div className="j-hero-copy">
+          <h1 className="j-title">{train.name}</h1>
+          <div className="j-hero-sub">
+            {train.running
+              ? `Live fix ${train.age_s ?? '?'} s old · auto-updates every ${POLL_READY_MS / 1000} s`
+              : 'This service is not running right now — route shown for reference'}
+          </div>
+          {train.route_ends && train.route_ends.length === 2 && (
+            <div className="j-hero-ends mono">{train.route_ends[0]} → {train.route_ends[1]}</div>
+          )}
+        </div>
+      </div>
 
+      <div className="panel panel-pad">
         <div className="progress-track">
           <div className="progress-fill" style={{ width: `${Math.round(train.progress * 100)}%` }} />
         </div>

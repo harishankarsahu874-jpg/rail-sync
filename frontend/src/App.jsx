@@ -6,6 +6,7 @@ import Login from './components/Login.jsx';
 import RailwayArt from './components/RailwayArt.jsx';
 import Station from './components/Station.jsx';
 import Saathi from './components/Saathi.jsx';
+import { trainArt } from './trainArt.js';
 
 const TRAIN_ICON = (
   <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -27,11 +28,16 @@ function TopBar({ session, onSignOut }) {
           </span>
         </Link>
         <span className="topbar-spacer" />
-        <span className="chip chip-teal"><span className="dot" />LIVE</span>
         {session && (
-          <span className="chip chip-plain topbar-user" title={`signed in via ${session.mode}`}>
-            👤 {session.name}
-            <button type="button" className="topbar-signout" onClick={onSignOut} title="Sign out">×</button>
+          <span className="user-pill" title={`signed in via ${session.mode}`}>
+            <span className="user-ava">{(session.name || 'G').trim().charAt(0).toUpperCase()}</span>
+            <span className="user-meta">
+              <b>{session.name}</b>
+              <i>{{ passenger: 'Passenger', guest: 'Guest mode', google: 'Google demo', partner: 'Partner' }[session.mode] || 'Traveller'}</i>
+            </span>
+            <button type="button" className="user-out" onClick={onSignOut} title="Sign out" aria-label="Sign out">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" /></svg>
+            </button>
           </span>
         )}
       </div>
@@ -99,6 +105,7 @@ function Hero() {
           <div className="search-results">
             {results.map((row) => (
               <button key={row.number} type="button" onClick={() => go(row.number)}>
+                <img className="res-thumb" src={trainArt(row)} alt="" />
                 <span className="mono" style={{ color: 'var(--teal-ink)', fontWeight: 600 }}>{row.number}</span>
                 <span>{row.name}</span>
                 <span className="faint" style={{ marginLeft: 'auto', fontSize: 11 }}>

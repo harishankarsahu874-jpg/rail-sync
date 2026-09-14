@@ -3,106 +3,49 @@ export const MAPTILER_KEY = (import.meta.env.VITE_MAPTILER_API_KEY || '').trim()
 export const MAPTILER_STYLE = (import.meta.env.VITE_MAPTILER_STYLE || 'basic-v2-dark').trim();
 export const GEOAPIFY_KEY = (import.meta.env.VITE_GEOAPIFY_API_KEY || '').trim();
 
-/** Clean streets view — keyless OpenStreetMap standard raster. */
-/** Night-mode look, keyless: OSM raster dimmed to a dark greyscale board. */
-/** Realistic satellite imagery (keyless Esri World Imagery) + place labels. */
-export function satelliteStyle() {
+/* One combined keyless style: every Esri basemap lives in the same style as
+   its own raster layer, and switching type only flips layer *visibility*.
+   No setStyle() call ever happens, so the route line / halt dots / labels
+   (vector layers added on top) survive every switch — the old setStyle path
+   wiped them on Streets. */
+export function baseStyle() {
+  const raster = (tiles, attribution) => ({ type: 'raster', tileSize: 256, maxzoom: 19, tiles, attribution });
+  const E = 'https://server.arcgisonline.com/ArcGIS/rest/services';
   return {
     version: 8,
     sources: {
-      esri: {
-        type: 'raster',
-        tileSize: 256,
-        maxzoom: 19,
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        ],
-        attribution: 'Imagery \u00a9 Esri, Maxar, Earthstar Geographics & the GIS User Community',
-      },
-      esriPlaces: {
-        type: 'raster',
-        tileSize: 256,
-        maxzoom: 19,
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
-        ],
-        attribution: 'Places labels \u00a9 Esri',
-      },
-      esriTransport: {
-        type: 'raster',
-        tileSize: 256,
-        maxzoom: 19,
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
-        ],
-        attribution: 'Transport overlay \u00a9 Esri',
-      },
+      esriSat: raster([`${E}/World_Imagery/MapServer/tile/{z}/{y}/{x}`],
+        'Imagery © Esri, Maxar, Earthstar Geographics & the GIS User Community'),
+      esriPlaces: raster([`${E}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`],
+        'Places labels © Esri'),
+      esriTransport: raster([`${E}/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}`],
+        'Transport overlay © Esri'),
+      esriStreets: raster([`${E}/World_Street_Map/MapServer/tile/{z}/{y}/{x}`],
+        '© Esri World Street Map contributors'),
     },
     layers: [
-      { id: 'esri', type: 'raster', source: 'esri' },
-      { id: 'esri-transport', type: 'raster', source: 'esriTransport', paint: { 'raster-opacity': 0.5 } },
-      { id: 'esri-places', type: 'raster', source: 'esriPlaces' },
+      { id: 'rs-base-sat', type: 'raster', source: 'esriSat' },
+      { id: 'rs-base-sat-transport', type: 'raster', source: 'esriTransport', paint: { 'raster-opacity': 0.5 } },
+      { id: 'rs-base-sat-places', type: 'raster', source: 'esriPlaces' },
+      { id: 'rs-base-streets', type: 'raster', source: 'esriStreets', layout: { visibility: 'none' } },
     ],
   };
 }
 
-/** Streets \u2014 keyless Esri World Street Map (OSM volunteer tiles block cloud IPs). */
-export function streetsStyle() {
-  return {
-    version: 8,
-    sources: {
-      esriStreets: {
-        type: 'raster',
-        tileSize: 256,
-        maxzoom: 19,
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
-        ],
-        attribution: '\u00a9 Esri World Street Map contributors',
-      },
-    },
-    layers: [{ id: 'esri-streets', type: 'raster', source: 'esriStreets' }],
-  };
-}
-
-/** Night board \u2014 keyless Esri dark-gray canvas. */
-export function darkStyle() {
-  return {
-    version: 8,
-    sources: {
-      esriDark: {
-        type: 'raster',
-        tileSize: 256,
-        maxzoom: 19,
-        tiles: [
-          'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-        ],
-        attribution: '\u00a9 Esri Canvas World Dark',
-      },
-    },
-    layers: [{ id: 'esri-dark', type: 'raster', source: 'esriDark' }],
-  };
-}
-
-/** Legacy entry point kept for older imports: streets by default. */
-export function mapStyle(forceFallback = false) {
-  return streetsStyle();
-}
-
-/** Realistic satellite imagery (keyless Esri World Imagery raster). */
-/** The three basemaps the passenger can switch between — all keyless. */
+/** The two basemaps the passenger can switch between — all keyless Esri. */
 export const MAP_TYPES = [
-  { id: 'sat', label: '🛰 Satellite', build: () => satelliteStyle() },
-  { id: 'streets', label: '🗺 Streets', build: () => streetsStyle() },
-  { id: 'dark', label: '🌑 Dark', build: () => darkStyle() },
+  { id: 'sat', label: '🛰 Satellite', layers: ['rs-base-sat', 'rs-base-sat-transport', 'rs-base-sat-places'] },
+  { id: 'streets', label: '🗺 Streets', layers: ['rs-base-streets'] },
 ];
+
+export const ALL_BASE_LAYERS = MAP_TYPES.flatMap((t) => t.layers);
 
 /** Reverse-geocode the live fix (Geoapify browser key, origin-restricted). */
 export async function reverseGeocode(lat, lng) {
   if (!GEOAPIFY_KEY) return { available: false, reason: 'VITE_GEOAPIFY_API_KEY is not configured' };
   const url = new URL('https://api.geoapify.com/v1/geocode/reverse');
-  url.searchParams.set('lat', lat);
-  url.searchParams.set('lon', lng);
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lng));
   url.searchParams.set('format', 'json');
   url.searchParams.set('lang', 'en');
   url.searchParams.set('limit', '1');

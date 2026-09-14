@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { api } from '../api.js';
+import { trainArt } from '../trainArt.js';
 
 const fmtMin = (minutes) => {
   if (minutes == null || Number.isNaN(minutes)) return '—';
@@ -143,6 +144,7 @@ export default function Station() {
               {services.length === 0 && <div className="card-sub">Indexing the timetable…</div>}
               {services.map((s) => (
                 <Link key={`${s.number}-${s.sched}`} to={`/train/${s.number}`} className="st-service">
+                  <img className="st-thumb" src={trainArt(s)} alt="" />
                   <span className="mono st-snum">{s.number}</span>
                   <span className="st-sname">{s.name}</span>
                   <span className="mono st-smeta">{s.from}→{s.to} · {s.sched || '—'} · {s.days}</span>

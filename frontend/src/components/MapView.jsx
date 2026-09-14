@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as maplibregl from 'maplibre-gl';
-import { mapStyle, MAP_TYPES } from '../geo.js';
+import { baseStyle, MAP_TYPES, ALL_BASE_LAYERS } from '../geo.js';
 
 const storedType = () => {
   try {
@@ -35,8 +35,7 @@ export default function MapView({ position, running, routeGeo = [], track = null
     if (!containerRef.current || mapRef.current) return undefined;
     const first = (routeGeo || [])[0];
     const center = position ? [position.lng, position.lat] : first ? [first.lng, first.lat] : [79.8, 23.4];
-    const type = MAP_TYPES.find((t) => t.id === storedType()) || MAP_TYPES[0];
-    const initialStyle = type.build();
+    const initialStyle = baseStyle();
     initialStyle.glyphs = GLYPHS;
     const map = new maplibregl.Map({
       container: containerRef.current,
@@ -195,19 +194,21 @@ export default function MapView({ position, running, routeGeo = [], track = null
       map.fitBounds(bounds, { padding: 60, maxZoom: 9.5 });
     };
 
+    /* Type switch = visibility flip inside ONE style: route/stops/labels
+       (vector layers) are never wiped, unlike the old setStyle() path. */
     const applyType = (id, silent = false) => {
       const next = MAP_TYPES.find((t) => t.id === id) || MAP_TYPES[0];
       try { localStorage.setItem('rs_maptype', next.id); } catch { /* ignore */ }
       setMapType(next.id);
-      const st = next.build();
-      st.glyphs = GLYPHS;
-      map.setStyle(st);
-      map.once('style.load', () => { addLayers(); paint(); });
+      const on = new Set(next.layers);
+      ALL_BASE_LAYERS.forEach((lid) => {
+        if (map.getLayer(lid)) map.setLayoutProperty(lid, 'visibility', on.has(lid) ? 'visible' : 'none');
+      });
       if (!silent) setNote('');
     };
     map._rsApplyType = applyType;
 
-    map.on('load', () => { addLayers(); paint(); });
+    map.on('load', () => { addLayers(); paint(); applyType(storedType(), true); });
     return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
