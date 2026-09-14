@@ -30,7 +30,17 @@ def set_manager(manager: ProviderManager):
 
 @router.get("/health")
 def health():
+    asset = ""
+    try:
+        import re
+        from . import config
+        index = (config.DIST_DIR / "index.html").read_text(encoding="utf-8")
+        m = re.search(r'src="(?:/)?(assets/index-[^"]+\.js)"', index)
+        asset = m.group(1) if m else ""
+    except Exception:  # noqa: BLE001
+        asset = ""
     return {"ok": True, "service": "railsync-live",
+            "asset": asset,
             "providers_configured": sum(1 for row in _manager.public_status()["items"].values()
                                          if row["configured"]),
             "catalogue": catalog.stats()}

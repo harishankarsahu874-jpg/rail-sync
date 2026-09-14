@@ -231,6 +231,9 @@ export default function Journey() {
             <div className="card-sub">
               Pulsing marker = live fix (snapped to real OSM track when inside guard) ·
               teal line = route ahead · dots = every scheduled halt
+              {routeGeo.length >= 2
+                ? <span className="chip chip-teal" style={{ marginLeft: 8 }}>ROUTE DRAWN · {routeGeo.length} halts plotted</span>
+                : <span className="chip chip-plain" style={{ marginLeft: 8 }}>plotting route…</span>}
             </div>
             <div style={{ marginTop: 12 }}>
               <Suspense fallback={<div className="skel" style={{ height: 420, borderRadius: 16 }} />}>

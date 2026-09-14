@@ -166,6 +166,32 @@ function Hero() {
   );
 }
 
+function StaleBundleGuard() {
+  const [stale, setStale] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const check = async () => {
+      try {
+        const h = await api.get('/api/health');
+        if (!alive || !h.asset) return;
+        const mine = (import.meta.url || '').split('/').pop();
+        const served = h.asset.split('/').pop();
+        if (mine && served && mine !== served) setStale(true);
+      } catch { /* offline */ }
+    };
+    check();
+    const iv = setInterval(check, 45_000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
+  if (!stale) return null;
+  return (
+    <div className="stale-toast" role="alert">
+      <span>🚂 A newer RailSync build is on the server — your tab is on an old one.</span>
+      <button type="button" onClick={() => window.location.reload()}>Load new version</button>
+    </div>
+  );
+}
+
 function readSession() {
   try {
     const raw = localStorage.getItem('railsync_session') || sessionStorage.getItem('railsync_session');
@@ -193,6 +219,7 @@ export default function App() {
   }
   return (
     <>
+      <StaleBundleGuard />
       <TopBar session={session} onSignOut={signOut} />
       <Routes>
         <Route path="/" element={<Hero />} />
