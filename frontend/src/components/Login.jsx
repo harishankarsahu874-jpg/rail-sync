@@ -22,7 +22,6 @@ export default function Login({ onDone }) {
   const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
-  const [q, setQ] = useState('');
   /* signup-only fields */
   const [suName, setSuName] = useState('');
   const [suId, setSuId] = useState('');
@@ -82,12 +81,6 @@ export default function Login({ onDone }) {
     finish({ name: id.trim().split('@')[0], mode: 'passenger' });
   };
 
-  const search = (e) => {
-    e.preventDefault();
-    if (!q.trim()) return;
-    finish({ name: 'Guest', mode: 'guest', goto: `/train/${encodeURIComponent(q.trim())}` });
-  };
-
   const googleBtn = (
     <button type="button" className="lg-google" onClick={() => finish({ name: 'Google Traveller', mode: 'google' })}>
       <svg width="16" height="16" viewBox="0 0 24 24"><path fill="#4285F4" d="M23 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.2a5.3 5.3 0 0 1-2.3 3.5v2.9h3.7c2.2-2 3.4-5 3.4-8.6z" /><path fill="#34A853" d="M12 24c3.1 0 5.7-1 7.6-2.8l-3.7-2.9c-1 .7-2.3 1.1-3.9 1.1-3 0-5.5-2-6.4-4.7H1.8v3A11.5 11.5 0 0 0 12 24z" /><path fill="#FBBC05" d="M5.6 14.7a6.9 6.9 0 0 1 0-4.4v-3H1.8a11.5 11.5 0 0 0 0 10.4l3.8-3z" /><path fill="#EA4335" d="M12 4.6c1.7 0 3.2.6 4.4 1.7l3.3-3.3A11.5 11.5 0 0 0 1.8 7.3l3.8 3c.9-2.7 3.4-4.7 6.4-4.7z" /></svg>
@@ -116,11 +109,7 @@ export default function Login({ onDone }) {
           ))}
           <span className="lg-link more">More ⌄</span>
         </nav>
-        <form className="lg-search" onSubmit={search}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></svg>
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search Train No. / Name / Station" aria-label="Search train" />
-        </form>
-        <span className="lg-lang">🌐 English ⌄</span>
+        <span className="lg-lang">🌐 English </span>
       </header>
 
       <main className="lg-main">
