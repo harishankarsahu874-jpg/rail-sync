@@ -1,6 +1,8 @@
 """RailSync Live — REST API. Four endpoints, all partial-success."""
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from fastapi import APIRouter, HTTPException, Query
 
 from . import catalog, config, journey, trains_media
@@ -46,16 +48,28 @@ def health():
             "catalogue": catalog.stats()}
 
 
+_PHOTO_EXEC = ThreadPoolExecutor(max_workers=8)
+
+
 @router.get("/train_photos")
 def train_photos(nums: str = Query("", max_length=120)):
-    """Real per-train photography (Wikipedia infobox → Wikimedia Commons),
-    cached server-side. Frontend swaps class artwork for these when present."""
-    out: dict = {}
-    for n in [x.strip() for x in nums.split(",") if x.strip()][:8]:
+    """Real per-train photography (Wikipedia infobox → Wikimedia Commons →
+    number-titled railfan uploads), cached server-side and resolved in
+    parallel so a batch of 8 answers as fast as one."""
+    keys = [x.strip() for x in nums.split(",") if x.strip()][:8]
+
+    def one(n: str):
         cat = catalog.get(n) or {}
         row = trains_media.photo_for(n, cat.get("name") or f"Train {n}")
-        out[n] = {"url": row.get("url"), "source": row.get("source")}
-    return {"photos": out}
+        return n, {"url": row.get("url"), "source": row.get("source")}
+
+    return {"photos": dict(_PHOTO_EXEC.map(one, keys))}
+
+
+@router.get("/photo_stats")
+def photo_stats():
+    """How many of the 5,139 services already have a resolved real photo."""
+    return {"total": catalog.stats()["trains"], **trains_media.stats()}
 
 
 @router.get("/stations")

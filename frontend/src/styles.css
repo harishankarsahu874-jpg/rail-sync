@@ -470,7 +470,7 @@ body {
 .saathi-launcher.open .saathi-ring { display: none; }
 @keyframes saathi-pulse { 0% { transform: scale(1); opacity: .9; } 70% { transform: scale(1.35); opacity: 0; } 100% { transform: scale(1.35); opacity: 0; } }
 .saathi-live { position: absolute; right: 1px; bottom: 1px; width: 13px; height: 13px; border-radius: 50%; background: #22c55e; border: 2.5px solid #fff; }
-.saathi-nudge { position: absolute; right: 70px; top: 8px; white-space: nowrap; background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font: 700 11.5px var(--sans); box-shadow: 0 8px 22px rgba(8, 20, 45, .18); animation: saathi-bob 2.8s ease-in-out infinite; }
+.saathi-nudge { position: absolute; right: 4px; bottom: 74px; white-space: nowrap; background: #fff; color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; font: 700 11.5px var(--sans); box-shadow: 0 8px 22px rgba(8, 20, 45, .18); animation: saathi-bob 2.8s ease-in-out infinite; }
 @keyframes saathi-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 .saathi-panel { position: fixed; right: 22px; bottom: 96px; z-index: 91; width: 368px; max-width: calc(100vw - 32px); height: 540px; max-height: calc(100vh - 130px); display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: 0 24px 60px rgba(8, 20, 45, .35); animation: saathi-in .22s ease-out; }
 @keyframes saathi-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
-from . import config
+from . import config, trains_media
 from .api import router, set_manager
 from .providers.manager import ProviderManager
 
@@ -44,3 +44,9 @@ def spa(full_path: str):
         return FileResponse(index, headers={"Cache-Control": "no-store, no-cache, must-revalidate",
                                             "Pragma": "no-cache"})
     return JSONResponse(status_code=503, content={"detail": "index.html missing in dist"})
+
+
+@app.on_event("startup")
+def _start_photo_prewarm() -> None:
+    """Fill the per-train photo cache for all 5,139 services in background."""
+    trains_media.start_prewarm()

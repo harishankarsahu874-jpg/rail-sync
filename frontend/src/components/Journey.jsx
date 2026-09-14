@@ -208,14 +208,14 @@ export default function Journey() {
         <div className="j-strip">
           {train.running ? (
             <>
-              <span>🚉 Started <b>{halts[0]?.name}</b> {halts[0]?.sched}{train.start_date ? ` · ${train.start_date}` : ''}</span>
-              <span>📍 Now <b>{Math.round(train.pos_km)} / {Math.round(train.total_km)} km</b> ({Math.round(train.progress * 100)}%)</span>
+              <span>◉ Started <b>{halts[0]?.name}</b> {halts[0]?.sched}{train.start_date ? ` · ${train.start_date}` : ''}</span>
+              <span>◎ Now <b>{Math.round(train.pos_km)} / {Math.round(train.total_km)} km</b> ({Math.round(train.progress * 100)}%)</span>
               {upcoming[0] && (
-                <span>⏭ Next <b>{upcoming[0].name}</b> · sched {upcoming[0].sched} → RF {fmtMin(upcoming[0].eta_final_min)}</span>
+                <span>» Next <b>{upcoming[0].name}</b> · sched {upcoming[0].sched} → RF {fmtMin(upcoming[0].eta_final_min)}</span>
               )}
             </>
           ) : (
-            <span>🕒 Departs <b>{halts[0]?.name}</b> at {halts[0]?.sched || '—'} · full route shown for reference</span>
+            <span>◷ Departs <b>{halts[0]?.name}</b> at {halts[0]?.sched || '—'} · full route shown for reference</span>
           )}
         </div>
 

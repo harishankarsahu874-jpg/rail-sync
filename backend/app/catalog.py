@@ -224,3 +224,8 @@ def _summary(train: dict) -> dict:
         "km": round(train["km"]), "days": train["days"],
         "stops": len(train["halt_stops"]),
     }
+
+
+def all_services() -> list[tuple[str, str]]:
+    """(number, name) for every catalogued service - for the photo pre-warm."""
+    return [(n, t["name"]) for n, t in _load().items()]
