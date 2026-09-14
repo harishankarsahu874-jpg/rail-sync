@@ -1,0 +1,14 @@
+{
+  "name": "RailSync — Live Journey Companion",
+  "short_name": "RailSync",
+  "description": "Live train tracking across India: real-time positions, Random-Forest ETA predictions, station dossiers and the Saathi journey companion.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4f6fb",
+  "theme_color": "#0d1b33",
+  "icons": [
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

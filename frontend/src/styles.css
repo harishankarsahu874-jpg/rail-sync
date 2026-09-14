@@ -557,3 +557,37 @@ body {
 .lg-left-copy h1 { font-size: 29px; }
 .lg-banner { margin: 0 18px 18px; padding: 10px 12px; }
 @media (max-width: 980px) { .lg-card { max-width: 100%; } }
+
+/* ============ V12 · readable login hero copy ============ */
+.lg-left-scrim { background: linear-gradient(180deg, rgba(8, 15, 35, .38) 0%, rgba(8, 15, 35, .18) 34%, rgba(8, 15, 35, .84) 76%, rgba(8, 15, 35, .95) 100%); }
+.lg-left-copy h1 { text-shadow: 0 2px 16px rgba(0, 0, 0, .65); }
+.lg-left-copy p { display: inline-block; background: rgba(8, 15, 35, .58); border: 1px solid rgba(255, 255, 255, .22); backdrop-filter: blur(7px); border-radius: 12px; padding: 9px 13px; color: #fff; font-weight: 600; }
+
+/* ============ V12 · download-app button ============ */
+.lg-download { display: flex; align-items: center; justify-content: center; gap: 9px; border: 1.5px dashed rgba(14, 143, 126, .65); background: var(--teal-soft); color: var(--teal-ink); border-radius: 12px; padding: 10px; font: 800 12.5px var(--sans); cursor: pointer; }
+.lg-download:hover { background: #c9f3ea; }
+
+/* ============ V12 · mobile clarity pass ============ */
+@media (max-width: 640px) {
+  .hero-art { display: none; }
+  .hero h1 { font-size: 23px; }
+  .hero h1 span { font-size: 15px; }
+  .hero p { font-size: 12.5px; }
+  .searchbox { flex-wrap: wrap; padding: 10px; gap: 8px; }
+  .searchbox input { flex-basis: 100%; font-size: 14px; }
+  .searchbox button { flex-basis: 100%; padding: 11px; }
+  .try-row { flex-wrap: nowrap; overflow-x: auto; justify-content: flex-start; padding: 2px 2px 6px; scrollbar-width: thin; }
+  .try-chip { flex: none; font-size: 11px; padding: 7px 10px; }
+  .grid-companion { grid-template-columns: 1fr !important; gap: 10px; }
+  .grid-companion > div { display: flex; gap: 10px; align-items: flex-start; padding: 12px; }
+  .grid-companion > div h3, .grid-companion > div .card-title { font-size: 13px; flex: none; max-width: 96px; }
+  .grid-companion > div p, .grid-companion > div .card-sub { font-size: 11.5px; }
+  .running-row { flex-wrap: wrap; font-size: 11px; }
+  .rr-pos { flex-basis: 100%; order: 5; }
+  .footer { padding: 14px 14px 84px; font-size: 10px; }
+  .saathi-nudge { display: none; }
+  .j-strip { font-size: 10.5px; }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .topbar-sub, .brand-sub { display: none; }
+  .lg-left-copy p { font-size: 12px; }
+}

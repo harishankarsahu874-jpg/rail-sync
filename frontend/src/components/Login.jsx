@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 const FEATS = [
   ['📍', 'Live Location', 'Track trains in real time'],
@@ -29,6 +29,31 @@ export default function Login({ onDone }) {
   const [suPass, setSuPass] = useState('');
   const [suConfirm, setSuConfirm] = useState('');
   const [suTerms, setSuTerms] = useState(false);
+  /* PWA install ("download the app") */
+  const [installEvt, setInstallEvt] = useState(null);
+  useEffect(() => {
+    const onPrompt = (e) => { e.preventDefault(); setInstallEvt(e); };
+    const onDone = () => setInstallEvt(null);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onDone);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onDone);
+    };
+  }, []);
+  const downloadApp = async () => {
+    if (installEvt) {
+      installEvt.prompt();
+      const choice = await installEvt.userChoice.catch(() => null);
+      if (choice && choice.outcome === 'accepted') setNote('RailSync is downloading to your device 🎉');
+      setInstallEvt(null);
+      return;
+    }
+    const ios = /iphone|ipad/i.test(navigator.userAgent);
+    setNote(ios
+      ? 'On iPhone: tap Share → "Add to Home Screen" to install RailSync 📥'
+      : 'Browser menu (⋮) → "Install app" / "Add to Home screen" 📥');
+  };
 
   const finish = (session) => {
     const store = remember ? localStorage : sessionStorage;
@@ -233,6 +258,10 @@ export default function Login({ onDone }) {
                 )}
               </>
             )}
+            <button type="button" className="lg-download" onClick={downloadApp}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="m7 10 5 5 5-5" /><path d="M12 15V3" /></svg>
+              Download RailSync App — install on phone / PC
+            </button>
             <button type="button" className="login-guest-btn" onClick={() => finish({ name: 'Guest', mode: 'guest' })}>
               Exploring? Continue as Guest →
             </button>
