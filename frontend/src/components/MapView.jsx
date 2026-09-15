@@ -44,10 +44,15 @@ export default function MapView({ position, running, routeGeo = [], track = null
       zoom: position || routeGeo.length ? 5.2 : 4.4,
       minZoom: 3,
       maxZoom: 17,
-      attributionControl: true,
+      attributionControl: { compact: true },
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+    /* phones: start the compact attribution collapsed to its (i) button */
+    if (window.innerWidth < 640) {
+      const at = map.getContainer().querySelector('.maplibregl-ctrl-attrib');
+      if (at) at.classList.remove('maplibregl-compact-show');
+    }
     map.addControl(new maplibregl.ScaleControl({ unit: 'metric', maxWidth: 110 }), 'bottom-right');
 
     let tileErrors = 0;
@@ -191,7 +196,7 @@ export default function MapView({ position, running, routeGeo = [], track = null
         const bounds = pts.reduce((b, p) => b.extend([p.lng, p.lat]),
           new maplibregl.LngLatBounds([pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]));
         if (trainAt) bounds.extend(trainAt);
-        map.fitBounds(bounds, { padding: 60, maxZoom: 6.5 });
+        map.fitBounds(bounds, { padding: (window.innerWidth < 640 ? 20 : 60), maxZoom: 6.5 });
       }
     };
     map._rsPaint = paint;
@@ -202,7 +207,7 @@ export default function MapView({ position, running, routeGeo = [], track = null
       const bounds = pts.reduce((b, p) => b.extend([p.lng, p.lat]),
         new maplibregl.LngLatBounds([pts[0].lng, pts[0].lat], [pts[0].lng, pts[0].lat]));
       if (cur.running && cur.position) bounds.extend([cur.position.lng, cur.position.lat]);
-      map.fitBounds(bounds, { padding: 60, maxZoom: 9.5 });
+      map.fitBounds(bounds, { padding: (window.innerWidth < 640 ? 20 : 60), maxZoom: 9.5 });
     };
 
     /* Type switch = visibility flip inside ONE style: route/stops/labels
@@ -235,7 +240,6 @@ export default function MapView({ position, running, routeGeo = [], track = null
 
   return (
     <div className="map-shell">
-      <div ref={containerRef} style={{ height: '100%' }} />
       <div className="map-types" role="group" aria-label="Map type">
         {MAP_TYPES.map((t) => (
           <button
@@ -252,9 +256,12 @@ export default function MapView({ position, running, routeGeo = [], track = null
           ⤢ Full route
         </button>
       </div>
-      {note && <div className="map-note">{note}</div>}
+      <div className="map-frame">
+        <div ref={containerRef} style={{ height: '100%' }} />
+        {note && <div className="map-note">{note}</div>}
+      </div>
       <div className="map-legend">
-        <span><i className="lg-train" /> train (live fix)</span>
+        <span><i className="lg-train" /> train<span className="lg-extra"> (live fix)</span></span>
         <span><i className="lg-ahead" /> route ahead</span>
         <span><i className="lg-passed" /> covered</span>
         <span><i className="lg-next" /> next halt</span>

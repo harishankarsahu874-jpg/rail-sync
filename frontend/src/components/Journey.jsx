@@ -192,7 +192,6 @@ export default function Journey() {
           {train.route_ends && train.route_ends.length === 2 && (
             <div className="j-hero-ends mono">{train.route_ends[0]} → {train.route_ends[1]}</div>
           )}
-          {photo && <span className="j-hero-credit">📷 {photo.source === 'wikipedia' ? 'Wikipedia' : 'Wikimedia Commons'}</span>}
         </div>
       </div>
 
