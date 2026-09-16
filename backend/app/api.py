@@ -82,19 +82,25 @@ def stations(q: str = Query("", min_length=1, max_length=60)):
 def station(code: str, name: str = Query("", max_length=80), train: str = Query("", max_length=8)):
     """Station dossier: photo, encyclopedia summary, every catalogued service
     that calls here — for ANY station of ANY of the 5,139 catalogued trains."""
-    pretty = name.upper() or code.upper()
-    media = _manager.station_info(code.upper(), pretty)
+    pretty = (name or catalog.station_name(code.upper()) or code).upper()
+    coord = catalog.coord(code.upper())
+    media = _manager.station_info(code.upper(), pretty, coord=coord)
     services = catalog.trains_at(code)
-    if services:
-        summary = media.get("summary") or (
+    source = media.get("source")
+    if media.get("summary"):
+        summary = media["summary"]
+    elif services:
+        summary = (
             f"{pretty.title()} ({code.upper()}) is a scheduled halt on {len(services)} catalogued "
             f"Indian Railways services in the uploaded timetable, including "
             + ", ".join(f"{s['number']} {s['name']}" for s in services[:3]) + ".")
+        source = "RailSync uploaded timetable — no location-verified encyclopedia article"
     else:
-        summary = media.get("summary") or f"{pretty.title()} ({code.upper()}) appears on the uploaded Indian timetable."
+        summary = f"{pretty.title()} ({code.upper()}) appears on the uploaded Indian timetable."
+        source = "RailSync uploaded timetable — no location-verified encyclopedia article"
     return {
         "code": code.upper(), "name": pretty.title(),
-        "image": media.get("image"), "summary": summary,
+        "image": media.get("image"), "summary": summary, "summary_source": source,
         "services_count": catalog.count_at(code), "services": services,
         "train": train or None,
     }

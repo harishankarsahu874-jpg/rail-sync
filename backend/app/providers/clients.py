@@ -257,6 +257,30 @@ class WikimediaClient:
         extract = (p.get("extract") or "").strip()
         return extract or None
 
+    def page_coords(self, title: str):
+        """(lat, lng) of a Wikipedia article, or None — used to verify that an
+        encyclopedia match is actually about OUR station, not a namesake."""
+        p = get_json(self.name, "https://en.wikipedia.org/w/api.php",
+                     params={"action": "query", "format": "json",
+                             "prop": "coordinates", "titles": title},
+                     timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        pages = ((p or {}).get("query") or {}).get("pages") or {}
+        for page in pages.values():
+            coords = (page or {}).get("coordinates") or []
+            if coords and "lat" in coords[0] and "lon" in coords[0]:
+                return float(coords[0]["lat"]), float(coords[0]["lon"])
+        return None
+
+    def geosearch(self, lat: float, lng: float, radius: int = 25000, limit: int = 10):
+        """Wikipedia articles geotagged within `radius` metres of a point."""
+        p = get_json(self.name, "https://en.wikipedia.org/w/api.php",
+                     params={"action": "query", "format": "json", "list": "geosearch",
+                             "gscoord": f"{lat}|{lng}", "gsradius": radius,
+                             "gslimit": limit},
+                     timeout=config.PROVIDER_TIMEOUT_SECONDS)
+        rows = ((p or {}).get("query") or {}).get("geosearch") or []
+        return [(r.get("title"), r.get("lat"), r.get("lon")) for r in rows if r.get("title")]
+
 
 class PhotonGeocoder:
     """Keyless komoot Photon — last-resort halt geocoder (rare names)."""

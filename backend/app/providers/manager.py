@@ -338,10 +338,17 @@ class ProviderManager:
         return self._cached(f"geo:{name}", config.GEOCODE_CACHE_SECONDS, load, store_none=False)
 
     # --------------------------------------------------------- station media
-    def station_info(self, code: str, name: str) -> dict:
-        """Photo + encyclopedia summary for a station, keyless, long-cached."""
+    def station_info(self, code: str, name: str, coord=None) -> dict:
+        """Photo + LOCATION-VERIFIED encyclopedia summary, keyless, long-cached.
+
+        A Wikipedia match is only accepted when its article coordinates sit
+        within 75 km of the station (or the title is an exact
+        "<name> railway station" article); otherwise we fall back to articles
+        geotagged near the station, and finally to honest catalogue facts —
+        never a namesake from another country.
+        """
         def load():
-            image, summary = None, None
+            image, summary, source = None, None, None
             pretty = name.title().replace(" Jn", " Junction")
             try:
                 image = self.wikimedia.image(f"{pretty} railway station India")
@@ -349,18 +356,57 @@ class ProviderManager:
                     self._mark("wikimedia", ok=True)
             except Exception as exc:  # noqa: BLE001
                 self._mark("wikimedia", ok=False, error=str(exc))
-            for title in (f"{pretty} railway station", f"{pretty} Junction railway station", pretty):
+
+            def verified(title: str, strict: bool = False) -> bool:
+                if not coord:
+                    return not strict
                 try:
-                    summary = self.wikimedia.summary(title)
+                    pc = self.wikimedia.page_coords(title)
                 except Exception:  # noqa: BLE001
-                    summary = None
-                if summary:
+                    pc = None
+                if pc is None:
+                    # no coordinate evidence: fine for exact "<name> railway
+                    # station" articles, never for a bare namesake title
+                    return not strict
+                return _haversine_km(coord, pc) <= 75
+
+            for title in (f"{pretty} railway station", f"{pretty} Junction railway station"):
+                try:
+                    cand = self.wikimedia.summary(title)
+                except Exception:  # noqa: BLE001
+                    cand = None
+                if cand and verified(title):
+                    summary, source = cand, f"Wikipedia · {title} (location-verified)"
                     break
+            if not summary and coord:
+                try:
+                    hits = self.wikimedia.geosearch(coord[0], coord[1], 25000, 10)
+                except Exception:  # noqa: BLE001
+                    hits = []
+                token = pretty.split()[0].lower()
+                for title, _la, _lo in hits:
+                    tl = title.lower()
+                    if not (token in tl or "railway station" in tl):
+                        continue
+                    try:
+                        cand = self.wikimedia.summary(title)
+                    except Exception:  # noqa: BLE001
+                        cand = None
+                    if cand:
+                        summary, source = cand, f"Wikipedia · {title} (geotagged within 25 km)"
+                        break
+            if not summary and coord:
+                try:
+                    cand = self.wikimedia.summary(pretty)
+                except Exception:  # noqa: BLE001
+                    cand = None
+                if cand and verified(pretty, strict=True):
+                    summary, source = cand, f"Wikipedia · {pretty} (location-verified)"
             if image or summary:
-                return {"image": image, "summary": summary}
+                return {"image": image, "summary": summary, "source": source}
             return None
         return self._cached(f"station:{code}:{name}", 7 * 86400, load, store_none=False) \
-            or {"image": None, "summary": None}
+            or {"image": None, "summary": None, "source": None}
 
     # ------------------------------------------------------------- track snap
     def snap_to_rail(self, lat: float, lng: float) -> dict | None:
@@ -422,3 +468,11 @@ def _project_segment(lat, lng, a, b):
     length2 = dx * dx + dy * dy or 1e-12
     t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / length2))
     return (ay + t * dy, ax + t * dx)
+
+
+def _haversine_km(a, b) -> float:
+    from math import asin, cos, radians, sin, sqrt
+    la1, lo1, la2, lo2 = map(radians, (a[0], a[1], b[0], b[1]))
+    dla, dlo = la2 - la1, lo2 - lo1
+    h = sin(dla / 2) ** 2 + cos(la1) * cos(la2) * sin(dlo / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(h))

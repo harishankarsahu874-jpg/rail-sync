@@ -181,6 +181,22 @@ _INDEX: dict[str, list[dict]] | None = None
 _INDEX_LOCK = threading.Lock()
 
 
+_NAMES: dict[str, str] | None = None
+
+
+def station_name(code: str) -> str | None:
+    """Canonical station name from the uploaded timetable (first sighting)."""
+    global _NAMES
+    with _INDEX_LOCK:
+        if _NAMES is None:
+            names: dict[str, str] = {}
+            for train in _load().values():
+                for stop in train["stops"]:
+                    names.setdefault(stop["code"], stop["name"])
+            _NAMES = names
+        return _NAMES.get(str(code).upper())
+
+
 def trains_at(code: str, limit: int = 40) -> list[dict]:
     """Every catalogued service that halts at a station code (all-India index)."""
     global _INDEX

@@ -117,6 +117,9 @@ export default function Station() {
           <div className="panel panel-pad">
             <div className="card-title">About this station</div>
             <p className="st-summary">{dossier?.summary || 'Loading encyclopedia summary…'}</p>
+            {dossier?.summary_source && (
+              <div className="faint" style={{ fontSize: 10.5, marginTop: 6 }}>Source: {dossier.summary_source}</div>
+            )}
             {halt && (
               <>
                 <div className="card-title" style={{ marginTop: 14 }}>
