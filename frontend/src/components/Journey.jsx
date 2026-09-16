@@ -104,7 +104,7 @@ export default function Journey() {
   const train = data?.train;
   const halts = useMemo(() => data?.halts || [], [data]);
   const upcoming = halts.filter((h) => !h.passed);
-  const passed = halts.filter((h) => h.passed).slice(-3).reverse();
+  const passed = halts.filter((h) => h.passed).slice(-3);
   const profile = useMemo(() => {
     const points = data?.elevation?.profile?.points || [];
     const elevations = data?.elevation?.profile?.elevations || [];
@@ -190,7 +190,11 @@ export default function Journey() {
               : 'This service is not running right now — route shown for reference'}
           </div>
           {train.route_ends && train.route_ends.length === 2 && (
-            <div className="j-hero-ends mono">{train.route_ends[0]} → {train.route_ends[1]}</div>
+            <div className="j-hero-ends mono">
+              {train.route_ends[0]}{train.origin_dep ? ` · dep ${train.origin_dep}` : ''}
+              {' → '}
+              {train.route_ends[1]}{train.dest_arr ? ` · arr ${train.dest_arr}` : ''}
+            </div>
           )}
         </div>
       </div>

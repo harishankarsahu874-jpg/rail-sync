@@ -40,8 +40,21 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
     speed = _f(loc.get("speedKmh"))
     train_meta = data.get("train") or {}
 
-    # --- route: catalogue first (complete), RailRadar halts as fallback -----
-    if cat and cat["halt_stops"]:
+    # --- route: while the train is running, the RailRadar live route is the
+    # authoritative halt list (correct order, today's times, real coordinates);
+    # the uploaded catalogue is fallback + optional geometry filler. ----------
+    route = [r for r in (data.get("route") or []) if isinstance(r, dict)]
+    live_route = running and len(route) >= 2
+    if live_route:
+        halts = _normalise_halts(route)
+        if any(str(r.get("status") or "") for r in route):
+            for halt, row in zip(halts, route):
+                halt["passed"] = str(row.get("status") or "").lower() in (
+                    "departed", "at-station", "passed")
+            remaining = [h for h in halts if not h["passed"]]
+            if remaining:
+                remaining[0]["next"] = True
+    elif cat and cat["halt_stops"]:
         halts = []
         for s in cat["halt_stops"]:
             pt = catalog.coord(s["code"])
@@ -57,12 +70,16 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
             })
         route = []
     else:
-        route = [r for r in (data.get("route") or []) if isinstance(r, dict)]
         halts = _normalise_halts(route)
 
-    total_km = _f(train_meta.get("distance")) or (cat or {}).get("km") \
-        or max((h["distance_km"] for h in halts), default=0.0)
-    pos_km = _route_distance(data, route, halts) if route else _catalog_position(data, halts)
+    if live_route:
+        total_km = max((h["distance_km"] for h in halts), default=0.0) \
+            or _f(train_meta.get("distance")) or (cat or {}).get("km") or 0.0
+    else:
+        total_km = _f(train_meta.get("distance")) or (cat or {}).get("km") \
+            or max((h["distance_km"] for h in halts), default=0.0)
+    status_marked = live_route and any(h["passed"] for h in halts)
+    pos_km = _route_distance(data, route, halts, mark=not status_marked) if route else _catalog_position(data, halts)
     progress = round(min(1.0, pos_km / total_km), 4) if total_km else 0.0
     if not route and running:
         # catalogue board: trust the clock over (interpolated) distances
@@ -105,18 +122,19 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
                                            "passed": h["passed"], "lat": h["lat"],
                                            "lng": h["lng"]} for h in halts])
 
-    route_geo = [{"seq": h["seq"], "code": h["code"], "name": h["name"],
-                  "lat": h["lat"], "lng": h["lng"], "passed": h["passed"],
-                  "next": h["next"], "sched": h["sched"], "eta_final_min": h["eta_final_min"]}
-                 for h in halts if h["lat"] is not None]
+    route_geo = _build_route_geo(halts, cat, live_route)
 
     return {
         "train": {
             "number": str(train_meta.get("number") or number),
             "name": train_meta.get("name") or (cat or {}).get("name") or f"Train {number}",
             "type": (cat or {}).get("type", ""),
-            "route_ends": [f"{(cat or {}).get('from_name', '')} ({(cat or {}).get('from_code', '')})",
-                           f"{(cat or {}).get('to_name', '')} ({(cat or {}).get('to_code', '')})"] if cat else None,
+            "route_ends": ([f"{halts[0]['name']} ({halts[0]['code']})",
+                            f"{halts[-1]['name']} ({halts[-1]['code']})"] if live_route else
+                           [f"{(cat or {}).get('from_name', '')} ({(cat or {}).get('from_code', '')})",
+                            f"{(cat or {}).get('to_name', '')} ({(cat or {}).get('to_code', '')})"] if cat else None),
+            "origin_dep": halts[0]["sched"] if halts else None,
+            "dest_arr": halts[-1]["sched"] if halts else None,
             "running_days": (cat or {}).get("days"),
             "status": status if data else "no_live_feed",
             "running": running,
@@ -139,10 +157,61 @@ def build(manager: ProviderManager, number: str, *, force: bool = False) -> dict
         "route_geo": route_geo,
         "catalogue": {"in_catalogue": cat is not None,
                       "stops": len(halts),
-                      "source": f"uploaded Indian timetable ({catalog.stats()['trains']:,} services)"},
+                      "source": ("RailRadar live route (authoritative order & times)" if live_route else
+                                 f"uploaded Indian timetable ({catalog.stats()['trains']:,} services)")},
         "providers": manager.public_status(),
         "fetched_at": time.time(),
     }
+
+
+def _haversine_km(a, b) -> float:
+    from math import asin, cos, radians, sin, sqrt
+    la1, lo1, la2, lo2 = map(radians, (a[0], a[1], b[0], b[1]))
+    dla, dlo = la2 - la1, lo2 - lo1
+    h = sin(dla / 2) ** 2 + cos(la1) * cos(la2) * sin(dlo / 2) ** 2
+    return 2 * 6371.0 * asin(sqrt(h))
+
+
+def _build_route_geo(halts: list[dict], cat, live_route: bool) -> list[dict]:
+    """Polyline points in route order. When the live route is authoritative and
+    the catalogue route agrees on endpoints, catalogue intermediates are woven
+    in so the drawn line hugs the real corridor; coordinate outliers (>350 km
+    jumps) are dropped so a bad fix can never draw a cross-country triangle."""
+    pts = []
+    cat_stops = (cat or {}).get("stops") or (cat or {}).get("halt_stops") or []
+    weave = False
+    if live_route and cat_stops:
+        weave = (halts[0]["code"] == cat_stops[0]["code"]
+                 and halts[-1]["code"] == cat_stops[-1]["code"])
+    if weave:
+        cseq = {s["code"]: s["seq"] for s in cat_stops}
+        for i, h in enumerate(halts):
+            pts.append((h["seq"], h["code"], h["name"], h["lat"], h["lng"],
+                        h["passed"], h["next"], h["sched"], h["eta_final_min"]))
+            if i + 1 < len(halts):
+                nxt = halts[i + 1]
+                s0, s1 = cseq.get(h["code"]), cseq.get(nxt["code"])
+                if s0 is not None and s1 is not None and s1 > s0 + 1:
+                    for cst in cat_stops:
+                        if s0 < cst["seq"] < s1:
+                            pt = catalog.coord(cst["code"])
+                            if pt:
+                                pts.append((cst["seq"], cst["code"], cst["name"],
+                                            pt[0], pt[1], h["passed"], False,
+                                            _label(cst["sched"], cst["day"]), None))
+    else:
+        pts = [(h["seq"], h["code"], h["name"], h["lat"], h["lng"], h["passed"],
+                h["next"], h["sched"], h["eta_final_min"]) for h in halts]
+    geo, last = [], None
+    for seq, code, name, lat, lng, passed, nxt, sched, eta in pts:
+        if lat is None or lng is None:
+            continue
+        if last is not None and _haversine_km(last, (lat, lng)) > 350:
+            continue
+        last = (lat, lng)
+        geo.append({"seq": seq, "code": code, "name": name, "lat": lat, "lng": lng,
+                    "passed": passed, "next": nxt, "sched": sched, "eta_final_min": eta})
+    return geo
 
 
 # --------------------------------------------------------------------- helpers
@@ -201,21 +270,27 @@ def _normalise_halts(route: list[dict]) -> list[dict]:
     for index, row in enumerate(route):
         name = str(row.get("stationName") or row.get("name") or row.get("station") or f"Stop {index + 1}")
         label, minutes = _sched(row)
+        day = int(_f(row.get("arrivalDay") or row.get("departureDay"), 1)) or 1
+        if label and day > 1 and "+" not in label:
+            label = f"{label} +{day - 1}d"
+        lat, lng = row.get("lat"), row.get("lng")
         halts.append({
             "seq": int(_f(row.get("sequence"), index + 1)),
             "code": str(row.get("stationCode") or row.get("code") or ""),
             "name": name.upper(),
             "distance_km": _f(row.get("distance")),
             "sched": label,
-            "sched_min": minutes,
-            "day": 1, "passed": False, "next": False,
-            "lat": None, "lng": None, "weather": None,
+            "sched_min": None if minutes is None else minutes + (day - 1) * 1440,
+            "day": day, "passed": False, "next": False,
+            "lat": float(lat) if isinstance(lat, (int, float)) else None,
+            "lng": float(lng) if isinstance(lng, (int, float)) else None,
+            "weather": None,
             "drift_min": None, "eta_min": None, "eta_final_min": None,
         })
     return halts
 
 
-def _route_distance(data: dict, route: list[dict], halts: list[dict]) -> float:
+def _route_distance(data: dict, route: list[dict], halts: list[dict], mark: bool = True) -> float:
     loc = data.get("currentLocation") or {}
     progress = max(0.0, min(1.0, _f(loc.get("segmentProgress"))))
     prev, nxt = data.get("previousHalt") or {}, data.get("nextHalt") or {}
@@ -227,11 +302,12 @@ def _route_distance(data: dict, route: list[dict], halts: list[dict]) -> float:
             d0 = halts[idx]["distance_km"] if idx < len(halts) else 0.0
             d1 = halts[idx + 1]["distance_km"] if idx + 1 < len(halts) else d0
     raw = d0 + progress * max(0.0, d1 - d0) if d0 >= 0 else 0.0
-    for halt in halts:
-        halt["passed"] = halt["distance_km"] <= raw
-    remaining = [h for h in halts if not h["passed"]]
-    if remaining:
-        remaining[0]["next"] = True
+    if mark:
+        for halt in halts:
+            halt["passed"] = halt["distance_km"] <= raw
+        remaining = [h for h in halts if not h["passed"]]
+        if remaining:
+            remaining[0]["next"] = True
     return max(0.0, raw)
 
 
