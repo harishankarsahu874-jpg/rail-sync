@@ -25,7 +25,7 @@ async function journey(n) {
 const upcomingOf = (d) => d.halts.filter((h) => !h.passed);
 const nextHaltAction = (d, num, firstLabel) => {
   const nx = upcomingOf(d)[0];
-  const acts = [{ label: firstLabel || 'Show full route', to: `/train/${num}` }];
+  const acts = [{ label: firstLabel || 'Show full route', to: `/train/${num}`, scroll: 'map' }];
   if (nx && nx.code) acts.push({ label: `${nx.name} dossier`, to: `/train/${num}/station/${nx.code}` });
   return acts;
 };
@@ -67,8 +67,9 @@ function routeLine(d) {
 export async function saathiReply(raw, ctx) {
   const text = (raw || '').trim();
   const t = text.toLowerCase();
-  const num = (text.match(TRAIN_NO) || [])[1] || ctx.train || null;
-  const A = (label, to) => [{ label, to }];
+  const explicitNum = (text.match(TRAIN_NO) || [])[1] || null;
+  const num = explicitNum || ctx.train || null;
+  const A = (label, to, scroll) => [{ label, to, scroll: scroll || null }];
 
   /* greetings & meta */
   if (/^(hi|hey|hello|namaste|namaskar|good (morning|evening|afternoon))\b/.test(t)) {
@@ -95,8 +96,9 @@ export async function saathiReply(raw, ctx) {
   }
 
   /* station board: "trains at <name>" */
-  const atMatch = t.match(/trains?\s+(?:at|from|through|calling|departing|arriving)\s+(?:station\s+)?([a-z][a-z\s]{2,30})/);
-  if (atMatch && !num) {
+  const atMatch = t.match(/trains?\s+(?:at|from|through|calling|departing|arriving)\s+(?:station\s+)?([a-z][a-z\s]{2,30})/)
+    || t.match(/^(?:which|list|show|tell me)?\s*(?:station\s+)?([a-z][a-z\s]{2,30})\s+(?:station\s+)?(?:board|trains|services)/);
+  if (atMatch && !explicitNum) {
     const q = atMatch[1].trim();
     try {
       const found = await api.get(`/api/stations?q=${encodeURIComponent(q)}`);
@@ -106,7 +108,10 @@ export async function saathiReply(raw, ctx) {
         const list = (sd.services || []).slice(0, 5);
         return {
           text: `🚉 ${sd.name} (${sd.code}) — ${sd.services_count} catalogued services call here.\nA few of them:\n${list.map((s) => `• ${s.number} ${s.name} — halt ${s.sched} (${s.from}→${s.to})`).join('\n') || 'No services indexed yet.'}\nSay a number and I'll open its live journey.`,
-          actions: list[0] ? A(`Open ${list[0].number} live`, `/train/${list[0].number}`) : null,
+          actions: [
+            ...(list[0] ? [{ label: `Open ${list[0].number} live`, to: `/train/${list[0].number}` }] : []),
+            { label: `Open ${sd.code} station board`, to: `/train/${(list[0] || { number: num || '18448' }).number}/station/${sd.code}?name=${encodeURIComponent(sd.name)}`, scroll: 'top' },
+          ],
         };
       }
     } catch { /* fall through */ }
@@ -140,27 +145,21 @@ export async function saathiReply(raw, ctx) {
         actions: nextHaltAction(d, num),
       };
     }
-    if (/(weather|rain|temperature|heat|cold)/.test(t)) {
-      const wx = d.weather || (upcomingOf(d)[0] && upcomingOf(d)[0].weather);
-      if (wx && wx.temperature_c != null) {
-        return { text: `🌦 ${wx.temperature_c}°C, ${wx.condition}, humidity ${wx.humidity_pct ?? '—'}%, wind ${wx.wind_kmh ?? '—'} km/h ${d.weather ? 'at the live position' : 'at the next stop'}.\nStop-level forecasts for the next halts appear on the live journey panel.`, actions: A('Show on map', `/train/${num}`) };
-      }
-      return { text: `Weather for ${num} hasn't loaded yet — it fills in a few seconds after the journey opens. Open the live view and ask me again.` };
-    }
     if (/(next|upcoming|approach)/.test(t) && /(station|stop|halt)/.test(t)) {
       const nx = upcomingOf(d)[0];
       if (!nx) return { text: `${tr.number} is near the end of its run — no further halts in the window.` };
       const after = upcomingOf(d)[1];
-      return { text: `⏭ ${nx.name} (${nx.code}) is next — RF ETA ${etaOf(nx) || '—'} vs sched ${nx.sched || '—'}.${after ? ` After that: ${after.name}.` : ''}`, actions: A('Show on map', `/train/${num}`) };
+      return { text: `⏭ ${nx.name} (${nx.code}) is next — RF ETA ${etaOf(nx) || '—'} vs sched ${nx.sched || '—'}.${after ? ` After that: ${after.name}.` : ''}`, actions: A('Show on map', `/train/${num}`, 'map') };
     }
-    if (/(late|delay|early|on time|why)/.test(t)) {
+    if (/(late|delay|delayed|early|on time|why|slack)/.test(t)) {
       const lines = statusLines(d, true);
       const drift = tr.delay_min != null ? Math.round(tr.delay_min) : 0;
-      let reason = 'Live feeds show no abnormal drift right now.';
+      let reason = 'Live feeds show no abnormal drift right now — the train is holding its schedule.';
       const wx = d.weather;
       if (drift >= 8 && wx && /rain|thunder|drizzle|snow/i.test(wx.condition || '')) reason = `Weather at the live position (${wx.condition}) is a likely contributor to the slip.`;
-      else if (drift >= 8) reason = 'Likely operational slack recovery — section running time and crossings; my feeds don\'t carry official delay remarks.';
-      return { text: [...lines, `🧾 ${reason}`].join('\n'), actions: A('Show on map', `/train/${num}`) };
+      else if (drift >= 8) reason = 'Likely operational slack recovery — section running time, crossings or traffic ahead; my feeds don\'t carry official delay remarks, so I won\'t invent one.';
+      else if (drift >= 2) reason = 'A small slip of a few minutes — normal running recovery on Indian Railways sections.';
+      return { text: [...lines, `🧾 ${reason}`].join('\n'), actions: A('Show on map', `/train/${num}`, 'map') };
     }
     if (/(eta|arrival|reach|when|time|schedule)/.test(t)) {
       const nx = upcomingOf(d)[0];
@@ -169,7 +168,14 @@ export async function saathiReply(raw, ctx) {
       const extra = [];
       if (nx) extra.push(`⏭ ${nx.name}: RF ${etaOf(nx) || '—'} (sched ${nx.sched || '—'}).`);
       if (dest && dest !== nx) extra.push(`🏁 Destination ${dest.name}: RF ${etaOf(dest) || dest.sched || '—'} (sched ${dest.sched || '—'}).`);
-      return { text: [...lines, ...extra].join('\n'), actions: A('Show on map', `/train/${num}`) };
+      return { text: [...lines, ...extra].join('\n'), actions: A('Show on map', `/train/${num}`, 'map') };
+    }
+    if (/(weather|rain|temperature|heat|cold|humid|cloud)/.test(t)) {
+      const wx = d.weather || (upcomingOf(d)[0] && upcomingOf(d)[0].weather);
+      if (wx && wx.temperature_c != null) {
+        return { text: `🌦 ${wx.temperature_c}°C, ${wx.condition}, humidity ${wx.humidity_pct ?? '—'}%, wind ${wx.wind_kmh ?? '—'} km/h ${d.weather ? 'at the live position' : 'at the next stop'}.\nStop-level forecasts for the next halts appear on the live journey panel.`, actions: A('Show on map', `/train/${num}`, 'map') };
+      }
+      return { text: `Weather for ${num} hasn't loaded yet — it fills in a few seconds after the journey opens. Open the live view and ask me again.` };
     }
     /* default: full live status */
     return {

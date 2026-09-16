@@ -43,6 +43,22 @@ export default function Saathi() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const runAction = (a) => {
+    setOpen(false);
+    const scroll = () => {
+      const sel = a.scroll === 'map' ? '.map-shell' : a.scroll === 'top' ? '.wrap' : null;
+      const el = sel && document.querySelector(sel);
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      else window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+    if (a.to === location.pathname) {
+      requestAnimationFrame(scroll);
+    } else {
+      navigate(a.to);
+      setTimeout(scroll, 450);
+    }
+  };
+
   const ask = async (raw) => {
     const text = (raw || '').trim();
     if (!text || typing) return;
@@ -85,7 +101,7 @@ export default function Saathi() {
                   {m.actions && m.actions.length > 0 && (
                     <div className="saathi-actions">
                       {m.actions.map((a) => (
-                        <button key={a.label} type="button" className="saathi-act" onClick={() => { navigate(a.to); setOpen(false); }}>
+                        <button key={a.label} type="button" className="saathi-act" onClick={() => runAction(a)}>
                           {a.label} →
                         </button>
                       ))}
